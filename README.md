@@ -23,23 +23,16 @@ Transformar um banco com **23 tabelas**, **306.372 registros** e **zero integrid
 
 ## 🏗️ Estrutura do Projeto
 
-```
+```folder
 bde/
-├── docker/
-│   ├── docker-compose.yaml        # MySQL 8.4 + phpMyAdmin
-│   ├── my.cnf                     # Configuração MySQL (SSL desabilitado)
-│   └── readme.txt                 # Notas de configuração DBeaver
-│
 ├── conexao_mysql.py               # Utilitário de conexão ao banco
 ├── validar_refatoracao.py         # Validação automática da estrutura (v2.0)
-├── analisar_dados_migracao.py     # Análise de qualidade dos dados
 │
 ├── script_padronizacao_nomenclatura.sql  # Renomeação de tabelas e colunas
 ├── funcao_conversao_dados.sql            # Funções de conversão + migração
 │
 ├── padrao_nomenclatura.md                # Padrão de nomenclatura (de-para)
 ├── RELATORIO_ANALISE_DADOS.md            # Relatório de qualidade dos dados
-├── CRONOGRAMA_IMPLEMENTACAO.md           # Cronograma em 6 fases
 ├── HANDSON_MIGRACAO_DATAWAREHOUSE.md     # Guia prático para a equipe
 │
 └── venv/                          # Ambiente virtual Python
@@ -50,10 +43,8 @@ bde/
 ## ⚙️ Ambiente
 
 | Componente | Detalhes |
-|------------|----------|
-| **Servidor** | `10.209.59.96` |
+| ------------ | ---------- |
 | **MySQL** | 8.4 (Docker) — porta `3306` |
-| **phpMyAdmin** | `http://10.209.59.96:8080` |
 | **Python** | 3.10+ com `mysql-connector-python` |
 | **SSL** | Desabilitado (`useSSL=false`) |
 
@@ -61,14 +52,7 @@ bde/
 
 ## 🚀 Início Rápido
 
-### 1. Subir o ambiente Docker
-
-```bash
-cd docker
-docker-compose up -d
-```
-
-### 2. Configurar o Python
+### 1. Configurar o Python
 
 ```bash
 python -m venv venv
@@ -82,13 +66,13 @@ source venv/bin/activate
 pip install mysql-connector-python
 ```
 
-### 3. Testar conexão
+### 2. Testar conexão
 
 ```bash
 python conexao_mysql.py
 ```
 
-### 4. Executar validação
+### 3. Executar validação
 
 ```bash
 python validar_refatoracao.py
@@ -99,7 +83,7 @@ python validar_refatoracao.py
 ## 📋 Fases de Implementação
 
 | # | Fase | Descrição | Prioridade |
-|---|------|-----------|------------|
+| --- | ------ | ----------- | ------------ |
 | 1 | **Backup** | Backup completo do banco original | 🔴 Crítica |
 | 2 | **Limpeza** | Resolver duplicatas e registros órfãos | 🔴 Crítica |
 | 3 | **Nomenclatura** | Renomear tabelas e colunas | 🟡 Alta |
@@ -117,7 +101,7 @@ python validar_refatoracao.py
 A tabela `tb_dados` (futura `fact_indicador`) armazena **todos os valores como VARCHAR**. A análise revelou:
 
 | Formato | % | Exemplo |
-|---------|---|---------|
+| --------- | --- | --------- |
 | Inteiros | 49,35% | `3`, `12`, `4590` |
 | Hífens (`-` = NULL) | 45,88% | `-` |
 | Decimal com vírgula | 2,69% | `0,56` |
@@ -132,7 +116,7 @@ A tabela `tb_dados` (futura `fact_indicador`) armazena **todos os valores como V
 
 ## 🌟 Modelo Estrela (Star Schema)
 
-```
+```flow
                     ┌──────────────────┐
                     │   dim_aspecto    │
                     └────────┬─────────┘
@@ -151,10 +135,9 @@ A tabela `tb_dados` (futura `fact_indicador`) armazena **todos os valores como V
 ## 📚 Documentação
 
 | Documento | Descrição |
-|-----------|-----------|
+| ----------- | ----------- |
 | [`padrao_nomenclatura.md`](padrao_nomenclatura.md) | Convenções de nomenclatura com mapeamento completo de-para |
 | [`RELATORIO_ANALISE_DADOS.md`](RELATORIO_ANALISE_DADOS.md) | Análise detalhada dos formatos de dados encontrados |
-| [`CRONOGRAMA_IMPLEMENTACAO.md`](CRONOGRAMA_IMPLEMENTACAO.md) | Cronograma em 6 fases com 3 planos (A/B/C) |
 | [`HANDSON_MIGRACAO_DATAWAREHOUSE.md`](HANDSON_MIGRACAO_DATAWAREHOUSE.md) | Guia prático hands-on para a equipe (~8h) |
 
 ---
@@ -162,7 +145,7 @@ A tabela `tb_dados` (futura `fact_indicador`) armazena **todos os valores como V
 ## 🧰 Scripts
 
 | Script | Linguagem | Função |
-|--------|-----------|--------|
+| -------- | ----------- | -------- |
 | `conexao_mysql.py` | Python | Conexão e execução de queries |
 | `validar_refatoracao.py` | Python | Validação automática com detecção de nomenclatura |
 | `analisar_dados_migracao.py` | Python | Análise de qualidade dos dados |

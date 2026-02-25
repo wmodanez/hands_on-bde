@@ -53,12 +53,12 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 - Acesso de rede ao servidor `10.209.59.96` (porta 3306)
 - Python 3.10+ instalado na estação de trabalho
 - DBeaver ou outro client MySQL instalado
-- Git (opcional, para clonar o repositório)
+- Git (para clonar o repositório)
 
 ### Tempo Estimado
 
 | Exercício | Duração | Nível |
-|-----------|---------|-------|
+| ----------- | -------- | --------- |
 | Configuração do Ambiente | 30 min | 🟢 Básico |
 | Exercício 1 — Diagnóstico | 45 min | 🟢 Básico |
 | Exercício 2 — Limpeza de Dados | 1h 30min | 🟡 Intermediário |
@@ -80,7 +80,7 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 3. Preencha:
 
    | Campo | Valor |
-   |-------|-------|
+   | ------- | -------|
    | **Host** | `10.209.59.96` |
    | **Porta** | `3306` |
    | **Database** | `imp_colabX` *(seu banco)* |
@@ -90,14 +90,12 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 4. Na aba **Driver Properties**, configure:
 
    | Propriedade | Valor |
-   |-------------|-------|
+   | ------------- | ------- |
    | `useSSL` | `false` |
    | `allowPublicKeyRetrieval` | `true` |
 
 5. Clique em **Testar Conexão** → deve retornar "Conectado"
 6. Clique em **Concluir**
-
-> 💡 **phpMyAdmin** também está disponível em `http://10.209.59.96:8080`
 
 ### 2.2 — Configuração do Python
 
@@ -137,7 +135,7 @@ CONFIG = {
     'host': '10.209.59.96',
     'user': 'colabX',            # ← seu usuário
     'password': 'sua_senha',     # ← sua senha
-    'database': 'imp_colabX'     # ← seu banco
+    'database': 'colabX'     # ← seu banco
 }
 
 def conectar():
@@ -199,8 +197,9 @@ python conexao_mysql.py
 ```
 
 **Resultado esperado:**
-```
-✅ Conectado ao MySQL 8.4.x | Banco: imp_colabX
+
+```prompt
+✅ Conectado ao MySQL 8.4.x | Banco: colabX
 📦 Tabelas encontradas: 23
    • tb_aspecto
    • tb_base_cart
@@ -270,6 +269,7 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION;
 ```
 
 📝 **Anote no seu caderno:**
+
 - Quais padrões de prefixo você encontra? (`cod_`, `nome_`, `loc_`, `var_`, `fnt_`, etc.)
 - Quais colunas fogem do padrão? (case misto, sem prefixo, abreviações diferentes)
 - Quantas tabelas não têm PK? Quantas não têm FK?
@@ -317,7 +317,7 @@ WHERE v.var_cod IS NULL;
 Preencha a tabela abaixo com seus achados:
 
 | Item | Valor Encontrado |
-|------|-----------------|
+| ------ | ----------------- |
 | Total de tabelas | |
 | Total de registros (todas as tabelas) | |
 | Total de PKs | |
@@ -355,6 +355,7 @@ ORDER BY cod_base;
 Escolha **uma** das estratégias abaixo:
 
 **Estratégia A — Remover duplicatas idênticas (manter 1):**
+
 ```sql
 -- Criar tabela temporária com registros únicos
 CREATE TABLE tb_base_cart_temp AS
@@ -367,6 +368,7 @@ RENAME TABLE tb_base_cart_temp TO tb_base_cart;
 ```
 
 **Estratégia B — Manter o registro com maior ano:**
+
 ```sql
 -- Criar tabela com o maior ano por cod_base
 CREATE TABLE tb_base_cart_temp AS
@@ -410,6 +412,7 @@ RENAME TABLE tb_loc_pai_temp TO tb_loc_pai;
 Escolha **uma** das estratégias para cada caso:
 
 **Opção 1 — Criar registro genérico (recomendado):**
+
 ```sql
 -- Criar localidade "Desconhecida" para referência
 INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
@@ -427,6 +430,7 @@ WHERE v.var_cod IS NULL;
 ```
 
 **Opção 2 — Remover registros órfãos:**
+
 ```sql
 -- ⚠️ CUIDADO: Perda de dados!
 DELETE d FROM tb_dados d
@@ -480,7 +484,7 @@ WHERE v.var_cod IS NULL;
 ### 5.1 — Entender o Padrão
 
 | Prefixo | Tipo | Exemplo |
-|---------|------|---------|
+| --------- | ----- | --------- |
 | `dim_` | Dimensão | `dim_localidade` |
 | `fact_` | Fato | `fact_indicador` |
 | `rel_` | Relacionamento N:N | `rel_variavel_fonte` |
@@ -489,7 +493,7 @@ WHERE v.var_cod IS NULL;
 | `log_` | Log/Auditoria | `log_busca` |
 
 | Sufixo | Uso | Exemplo |
-|--------|-----|---------|
+| --------- | ----- | --------- |
 | `_id` | Chave primária / FK | `localidade_id` |
 | `_nome` | Nome descritivo | `localidade_nome` |
 | `_txt` | Texto longo | `nota_txt` |
@@ -742,7 +746,7 @@ python analisar_dados_migracao.py
 ### 📝 Entregável do Exercício 4
 
 | Tipo de Dado | Quantidade | % | Exemplo |
-|--------------|-----------|---|---------|
+| -------------- | ----------- | --- | --------- |
 | INTEIRO | | | |
 | HIFEN (NULL) | | | |
 | DECIMAL_VIRGULA | | | |
@@ -867,7 +871,7 @@ FROM (
 **Resultado esperado:**
 
 | valor_teste | convertido |
-|-------------|-----------|
+| ------------- | ----------- |
 | 12345 | 12345.000000 |
 | - | NULL |
 | 0,56 | 0.560000 |
@@ -1183,6 +1187,7 @@ GROUP BY CONSTRAINT_TYPE;
 ### 9.2 — Consultas Típicas de Data Warehouse
 
 **Consulta 1 — Indicadores de uma localidade em um ano:**
+
 ```sql
 SELECT 
     l.localidade_nome,
@@ -1203,6 +1208,7 @@ LIMIT 20;
 ```
 
 **Consulta 2 — Evolução de um indicador ao longo dos anos:**
+
 ```sql
 SELECT 
     t.ano,
@@ -1217,6 +1223,7 @@ ORDER BY t.ano;
 ```
 
 **Consulta 3 — Ranking de localidades por indicador:**
+
 ```sql
 SELECT 
     l.localidade_nome,
@@ -1233,6 +1240,7 @@ LIMIT 10;
 ```
 
 **Consulta 4 — Fontes de uma variável:**
+
 ```sql
 SELECT 
     v.variavel_nome,
@@ -1271,7 +1279,7 @@ WHERE l.localidade_nivel = 3
 ### 📝 Entregável Final
 
 | Critério | Status |
-|----------|--------|
+| ---------- | -------- |
 | Banco sem tabelas com prefixo `tb_` | ⬜ |
 | Todas as colunas em `snake_case` | ⬜ |
 | Zero duplicatas em chaves primárias | ⬜ |
@@ -1290,7 +1298,7 @@ WHERE l.localidade_nivel = 3
 ### Arquivos do Projeto
 
 | Arquivo | Descrição |
-|---------|-----------|
+| --------- | ----------- |
 | `conexao_mysql.py` | Script de conexão ao banco |
 | `validar_refatoracao.py` | Validação automática da estrutura |
 | `analisar_dados_migracao.py` | Análise de tipos de dados nas colunas d_YYYY |
@@ -1302,7 +1310,7 @@ WHERE l.localidade_nivel = 3
 
 ### Modelo Estrela (Star Schema)
 
-```
+```flow
                     ┌──────────────────┐
                     │   dim_aspecto    │
                     │   aspecto_id PK  │

@@ -137,13 +137,21 @@ CONFIG = {
     'host': '10.209.59.96',
     'user': 'colabX',            # ← seu usuário
     'password': 'sua_senha',     # ← sua senha
-    'database': 'colabX'     # ← seu banco
 }
 
-def conectar():
-    """Conecta ao banco de dados MySQL"""
+def conectar(database='colabX'):
+    """Conecta ao banco de dados MySQL
+    
+    Args:
+        database (str): Nome do banco a conectar.
+                       'colabX' = seu banco (padrão)
+                       'imp' = banco de referência com dados originais
+    """
     try:
-        conexao = mysql.connector.connect(**CONFIG)
+        config = CONFIG.copy()
+        config['database'] = database
+        
+        conexao = mysql.connector.connect(**config)
         if conexao.is_connected():
             info = conexao.get_server_info()
             cursor = conexao.cursor()
@@ -183,6 +191,7 @@ def fechar(conexao):
 
 # Teste rápido
 if __name__ == "__main__":
+    # Conectar ao seu banco (padrão)
     conn = conectar()
     if conn:
         colunas, tabelas = executar_query(conn, "SHOW TABLES;")
@@ -190,6 +199,13 @@ if __name__ == "__main__":
         for t in tabelas:
             print(f"   • {t[0]}")
         fechar(conn)
+    
+    # Se quiser consultar o banco 'imp' para diagnóstico:
+    # conn_imp = conectar(database='imp')
+    # if conn_imp:
+    #     colunas, tabelas = executar_query(conn_imp, "SHOW TABLES;")
+    #     print(f"\n📦 Tabelas em 'imp': {len(tabelas)}")
+    #     fechar(conn_imp)
 ```
 
 ### 2.4 — Testar a Conexão
@@ -216,6 +232,74 @@ Antes de prosseguir, confirme:
 - [ ] Python com `mysql-connector-python` instalado
 - [ ] Script `conexao_mysql.py` retorna as tabelas (0 no banco do colaborador, 23 no banco `imp`)
 - [ ] Você consegue visualizar os dados via phpMyAdmin ou DBeaver
+
+---
+
+### 2.5 — Como Acessar o Banco `imp` (Referência)
+
+Para consultar o banco original e fazer diagnóstico, você tem 3 opções:
+
+#### **Opção 1: DBeaver — Criar Segunda Conexão**
+
+1. No DBeaver, clique em **Nova Conexão** → **MySQL**
+2. Configure igual à conexão anterior, MAS altere:
+   - **Database:** `imp` (em vez de `colabX`)
+3. Dê o nome de "imp - Referência" para diferenciação
+4. Agora você tem duas abas: uma com seu banco (0 tabelas) e outra com `imp` (23 tabelas)
+
+#### **Opção 2: Python — Parâmetro de Database**
+
+Use o parâmetro `database` na função `conectar()`:
+
+```python
+# Conectar ao banco 'imp' para diagnóstico
+conn_imp = conectar(database='imp')
+if conn_imp:
+    colunas, tabelas = executar_query(conn_imp, "SHOW TABLES;")
+    print(f"Tabelas em 'imp': {len(tabelas)}")  # Retorna 23
+    fechar(conn_imp)
+```
+
+#### **Opção 3: SQL — USE DATABASE**
+
+Se já estiver conectado, execute dentro do DBeaver:
+
+```sql
+USE imp;
+SHOW TABLES;  -- Mostrará as 23 tabelas do banco original
+```
+
+#### **Opção 4: Script Python — Comparação Automática** 📊
+
+Use o script `analisar_bancos_comparativo.py` para comparar visualmente:
+
+```bash
+python analisar_bancos_comparativo.py
+```
+
+**Resultado:**
+
+```
+======================================================================
+📊 COMPARAÇÃO: 'colabX' vs 'imp'
+======================================================================
+
+📦 Banco 'colabX':
+   Total de tabelas: 0
+   (vazio)
+
+📦 Banco 'imp' (Referência):
+   Total de tabelas: 23
+   • tb_aspecto
+   • tb_base_cart
+   • ...
+
+📈 Análise:
+   ✓ Seu banco está vazio (início dos exercícios)
+   ✓ Referência tem 23 tabelas para estudar
+```
+
+> 💡 **Dica:** Use a Opção 1 (DBeaver com 2 conexões) para comparar visualmente a estrutura original versus seu banco vazio.
 
 ---
 
@@ -1945,6 +2029,48 @@ ALTER TABLE dim_localidade
 ---
 
 ## 11. Referência Rápida
+
+### 🗄️ Guia: Acessar Seu Banco vs Banco `imp`
+
+| Contexto | Seu Banco (`colabX`) | Banco `imp` |
+| --- | --- | --- |
+| **Tabelas** | 0 (vazio no início) | 23 (estrutura original) |
+| **Uso** | Exercícios - fazer refatoração | Referência - consultar estrutura |
+| **DBeaver** | Nova conexão Database=`colabX` | Nova conexão Database=`imp` |
+| **Python** | `conectar()` ou `conectar('colabX')` | `conectar('imp')` |
+| **SQL direto** | `USE colabX; SHOW TABLES;` | `USE imp; SHOW TABLES;` |
+| **Comparação** | `python analisar_bancos_comparativo.py` | Visualiza ambos lado a lado |
+
+### Comandos Rápidos — Acessar `imp` 
+
+```bash
+# Python: Ver tabelas do banco 'imp'
+python -c "
+from conexao_mysql import conectar, executar_query, fechar
+conn = conectar('imp')
+if conn:
+    _, tabelas = executar_query(conn, 'SHOW TABLES;')
+    print(f'Tabelas em imp: {len(tabelas)}')
+    fechar(conn)
+"
+
+# Comparação automática de bancos
+python analisar_bancos_comparativo.py
+```
+
+```sql
+-- DBeaver: Ver estrutura original
+USE imp;
+
+-- Quantas tabelas?
+SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'imp';
+
+-- Quais tabelas?
+SHOW TABLES;
+
+-- Estrutura de uma tabela específica
+DESC tb_dados;
+```
 
 ### Arquivos do Projeto
 

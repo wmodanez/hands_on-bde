@@ -1,74 +1,82 @@
 import mysql.connector
 from mysql.connector import Error
 
-def conectar_banco():
-    """
-    Conecta ao banco de dados MySQL 'imp' no localhost
-    Usuário: root
-    Senha: 123456
+# =========================================
+# ⚠️ ALTERE PARA SEUS DADOS DE ACESSO
+# =========================================
+CONFIG = {
+    'host': '10.209.59.96',
+    'user': 'colabX',            # ← seu usuário
+    'password': 'sua_senha',     # ← sua senha
+}
+
+def conectar(database='colabX'):
+    """Conecta ao banco de dados MySQL
+    
+    Args:
+        database (str): Nome do banco a conectar.
+                       'colabX' = seu banco (padrão)
+                       'imp' = banco de referência com dados originais
     """
     try:
-        conexao = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            password='123456',
-            database='imp'
-        )
+        config = CONFIG.copy()
+        config['database'] = database
         
+        conexao = mysql.connector.connect(**config)
         if conexao.is_connected():
-            info_db = conexao.get_server_info()
-            print(f"Conectado com sucesso ao servidor MySQL versão {info_db}")
-            
+            info = conexao.get_server_info()
             cursor = conexao.cursor()
             cursor.execute("SELECT DATABASE();")
-            banco_atual = cursor.fetchone()
-            print(f"Banco de dados atual: {banco_atual[0]}")
-            
+            banco = cursor.fetchone()[0]
+            print(f"✅ Conectado ao MySQL {info} | Banco: {banco}")
+            cursor.close()
             return conexao
-        
     except Error as e:
-        print(f"Erro ao conectar ao MySQL: {e}")
+        print(f"❌ Erro ao conectar: {e}")
         return None
 
-def executar_query(conexao, query):
-    """
-    Executa uma query SELECT no banco de dados
-    """
+def executar_query(conexao, query, retornar=True):
+    """Executa uma query e retorna os resultados"""
     try:
         cursor = conexao.cursor()
         cursor.execute(query)
-        resultado = cursor.fetchall()
-        
-        # Exibe os resultados
-        for linha in resultado:
-            print(linha)
-        
-        cursor.close()
-        return resultado
-        
+        if retornar:
+            colunas = [desc[0] for desc in cursor.description]
+            resultados = cursor.fetchall()
+            cursor.close()
+            return colunas, resultados
+        else:
+            conexao.commit()
+            afetados = cursor.rowcount
+            cursor.close()
+            return afetados
     except Error as e:
-        print(f"Erro ao executar query: {e}")
+        print(f"❌ Erro: {e}")
         return None
 
-def fechar_conexao(conexao):
-    """
-    Fecha a conexão com o banco de dados
-    """
-    if conexao.is_connected():
+def fechar(conexao):
+    """Fecha a conexão"""
+    if conexao and conexao.is_connected():
         conexao.close()
-        print("Conexão fechada com sucesso")
+        print("✅ Conexão encerrada")
 
+# Teste rápido
 if __name__ == "__main__":
-    # Conecta ao banco de dados
-    conexao = conectar_banco()
+    # Conectar ao seu banco (padrão)
+    conn = conectar()
+    if conn:
+        colunas, tabelas = executar_query(conn, "SHOW TABLES;")
+        print(f"\n📦 Tabelas encontradas: {len(tabelas)}")
+        for t in tabelas:
+            print(f"   • {t[0]}")
+        fechar(conn)
     
-    if conexao:
-        # Exemplo: listar todas as tabelas do banco
-        print("\n--- Tabelas do banco de dados ---")
-        executar_query(conexao, "SHOW TABLES;")
-        
-        # Exemplo: executar uma query
-        # executar_query(conexao, "SELECT * FROM sua_tabela;")
+    # Se quiser consultar o banco 'imp' para diagnóstico:
+    # conn_imp = conectar(database='imp')
+    # if conn_imp:
+    #     colunas, tabelas = executar_query(conn_imp, "SHOW TABLES;")
+    #     print(f"\n📦 Tabelas em 'imp': {len(tabelas)}")
+    #     fechar(conn_imp)
         
         # Fecha a conexão
         fechar_conexao(conexao)

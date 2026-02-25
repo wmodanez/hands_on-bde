@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.4
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456 # Replace with a strong password
+      MYSQL_ROOT_HOST: '%' # Allow root connections from any host
+#      MYSQL_DATABASE: your_database_name # Optional: create an initial database
+      MYSQL_USER: web # Optional: create an initial user
+      MYSQL_PASSWORD: 123456 # Optional: set password for the user
+    ports:
+      - "3306:3306" # Expose MySQL port to the host (optional for phpMyAdmin)
+    volumes:
+      - db_data:/var/lib/mysql # Persist database data
+      - ./my.cnf:/etc/mysql/conf.d/my.cnf # Disable SSL for easier client connections
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: db # Link to the MySQL service by its service name
+      MYSQL_ROOT_PASSWORD: 123456 # Use the same root password as MySQL
+    ports:
+      - "8080:80" # Access phpMyAdmin at http://localhost:8080
+
+volumes:
+  db_data:

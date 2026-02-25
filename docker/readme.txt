@@ -1,0 +1,1 @@
+No DBeaver, configure a conexão para MySQL sem SSL (se necessário, defina useSSL=false nas propriedades do driver) e use como host o IP local

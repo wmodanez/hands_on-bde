@@ -8,9 +8,10 @@ CONFIG = {
     'host': '10.209.59.96',
     'user': 'colabX',            # ← seu usuário
     'password': 'sua_senha',     # ← sua senha
+    'database': 'colabX'          # ← seu banco (padrão)
 }
 
-def conectar(database='colabX'):
+def conectar(database=CONFIG['database']):
     """Conecta ao banco de dados MySQL
     
     Args:
@@ -77,6 +78,3 @@ if __name__ == "__main__":
     #     colunas, tabelas = executar_query(conn_imp, "SHOW TABLES;")
     #     print(f"\n📦 Tabelas em 'imp': {len(tabelas)}")
     #     fechar(conn_imp)
-        
-        # Fecha a conexão
-        fechar_conexao(conexao)

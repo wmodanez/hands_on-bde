@@ -273,7 +273,7 @@ SELECT fn_converter_valor_numerico('0,56');           -- 0.56
 INSERT INTO fact_indicador (...)
 SELECT ...
 FROM tb_dados d
-JOIN dim_tempo t ON t.ano = 2020
+JOIN dim_tempo t ON t.ano = 2020 AND t.mes IS NULL
 WHERE d.d_2020 IS NOT NULL
 LIMIT 1000;
 

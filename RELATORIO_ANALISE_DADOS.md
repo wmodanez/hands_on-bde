@@ -271,7 +271,7 @@ LIMIT 100;
        f.indicador_vlr AS migrado_vlr,
        f.indicador_tipo
    FROM tb_dados d
-   JOIN dim_tempo t ON t.ano = 2020
+   JOIN dim_tempo t ON t.ano = 2020 AND t.mes IS NULL
    LEFT JOIN fact_indicador f 
        ON f.localidade_id = d.loc_cod 
        AND f.variavel_id = d.var_cod 

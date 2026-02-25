@@ -1,8 +1,8 @@
 """
 Script de Validação e Execução da Refatoração para Data Warehouse
 Banco de dados: imp
-Data: 24/02/2026
-Versão: 2.0 - Com suporte à nova nomenclatura padronizada
+Data: 25/02/2026
+Versão: 3.0 - Com suporte à nova nomenclatura + modelo de regiões por órgão + dim_tempo mensal
 """
 
 import mysql.connector
@@ -49,6 +49,16 @@ TABELAS_MAPEAMENTO = {
     'tb_log_busca': 'log_busca',
     'tb_erro_mvto': 'log_erro_movimento',
 }
+
+# Tabelas novas (sem correspondente no modelo antigo)
+TABELAS_NOVAS = [
+    'dim_tempo',
+    'dim_orgao',
+    'dim_regiao',
+    'bridge_localidade_regiao',
+    'cfg_metadados',
+    'log_auditoria',
+]
 
 # Mapeamento de colunas: (tabela_nova, coluna_antiga) -> coluna_nova
 COLUNAS_MAPEAMENTO = {
@@ -123,11 +133,15 @@ PKS_DEFINICAO = {
     'dim_variavel': ['variavel_id'],
     'dim_base_cartografica': ['base_cartografica_id'],
     'dim_territorio': ['territorio_id'],
+    'dim_orgao': ['orgao_id'],
+    'dim_regiao': ['regiao_id'],
+    'dim_tempo': ['tempo_id'],
     'fact_indicador': ['localidade_id', 'variavel_id'],
     'rel_variavel_fonte': ['variavel_id', 'fonte_id'],
     'rel_variavel_nota': ['variavel_id', 'nota_id'],
     'rel_territorio_variavel': ['territorio_id', 'variavel_id'],
     'rel_base_ponto': ['localidade_id', 'base_cartografica_id', 'ponto_x', 'ponto_y'],
+    'bridge_localidade_regiao': ['vinculo_id'],
     'aux_localidade_hierarquia': ['localidade_id'],
     'aux_localidade_historico': ['localidade_id'],
     'cfg_consulta': ['consulta_id'],
@@ -149,6 +163,11 @@ FKS_DEFINICAO = [
     ('rel_base_ponto', 'base_cartografica_id', 'dim_base_cartografica', 'base_cartografica_id'),
     ('aux_localidade_hierarquia', 'localidade_id', 'dim_localidade', 'localidade_id'),
     ('aux_localidade_historico', 'localidade_id', 'dim_localidade', 'localidade_id'),
+    # Novas FKs - Modelo de regiões por órgão
+    ('dim_regiao', 'orgao_id', 'dim_orgao', 'orgao_id'),
+    ('dim_regiao', 'regiao_pai_id', 'dim_regiao', 'regiao_id'),
+    ('bridge_localidade_regiao', 'localidade_id', 'dim_localidade', 'localidade_id'),
+    ('bridge_localidade_regiao', 'regiao_id', 'dim_regiao', 'regiao_id'),
 ]
 
 
@@ -198,8 +217,8 @@ def detectar_nomenclatura(conexao):
     # Verificar se usa nomenclatura antiga (tb_*)
     tabelas_antigas = [t for t in tabelas if t.startswith('tb_')]
     
-    # Verificar se usa nomenclatura nova (dim_*, fact_*, rel_*, etc.)
-    tabelas_novas = [t for t in tabelas if t.startswith(('dim_', 'fact_', 'rel_', 'aux_', 'cfg_', 'log_'))]
+    # Verificar se usa nomenclatura nova (dim_*, fact_*, rel_*, bridge_*, etc.)
+    tabelas_novas = [t for t in tabelas if t.startswith(('dim_', 'fact_', 'rel_', 'bridge_', 'aux_', 'cfg_', 'log_'))]
     
     if len(tabelas_antigas) > len(tabelas_novas):
         return 'antiga'
@@ -389,6 +408,9 @@ def verificar_integridade_referencial(conexao):
             ('aux_localidade_hierarquia', 'localidade_id', 'dim_localidade', 'localidade_id'),
             ('aux_localidade_historico', 'localidade_id', 'dim_localidade', 'localidade_id'),
             ('rel_base_ponto', 'base_cartografica_id', 'dim_base_cartografica', 'base_cartografica_id'),
+            ('dim_regiao', 'orgao_id', 'dim_orgao', 'orgao_id'),
+            ('bridge_localidade_regiao', 'localidade_id', 'dim_localidade', 'localidade_id'),
+            ('bridge_localidade_regiao', 'regiao_id', 'dim_regiao', 'regiao_id'),
         ]
     else:
         verificacoes = [
@@ -461,9 +483,11 @@ def verificar_nomenclatura(conexao):
             'Dimensão (dim_)': [],
             'Fato (fact_)': [],
             'Relacionamento (rel_)': [],
+            'Bridge (bridge_)': [],
             'Auxiliar (aux_)': [],
             'Configuração (cfg_)': [],
             'Log (log_)': [],
+            'Views (vw_)': [],
             'Outras': []
         }
         
@@ -476,12 +500,16 @@ def verificar_nomenclatura(conexao):
                 grupos['Fato (fact_)'].append((tabela, registros))
             elif tabela.startswith('rel_'):
                 grupos['Relacionamento (rel_)'].append((tabela, registros))
+            elif tabela.startswith('bridge_'):
+                grupos['Bridge (bridge_)'].append((tabela, registros))
             elif tabela.startswith('aux_'):
                 grupos['Auxiliar (aux_)'].append((tabela, registros))
             elif tabela.startswith('cfg_'):
                 grupos['Configuração (cfg_)'].append((tabela, registros))
             elif tabela.startswith('log_'):
                 grupos['Log (log_)'].append((tabela, registros))
+            elif tabela.startswith('vw_'):
+                grupos['Views (vw_)'].append((tabela, registros))
             else:
                 grupos['Outras'].append((tabela, registros))
         
@@ -673,7 +701,7 @@ def main():
     """Função principal"""
     print("\n" + "=" * 70)
     print("VALIDAÇÃO E EXECUÇÃO DA REFATORAÇÃO PARA DATA WAREHOUSE")
-    print("Versão 2.0 - Com suporte à nomenclatura padronizada")
+    print("Versão 3.0 - Com suporte a regiões de trabalho por órgão")
     print("=" * 70)
     
     conexao = conectar()
@@ -691,9 +719,10 @@ def main():
         print("2. Aplicar padronização de nomenclatura")
         print("3. Criar PKs e FKs (após padronização)")
         print("4. Verificar resultado final")
-        print("5. Sair")
+        print("5. Validar modelo de regiões por órgão")
+        print("6. Sair")
         
-        opcao = input("\nEscolha uma opção (1-5): ").strip()
+        opcao = input("\nEscolha uma opção (1-6): ").strip()
         
         if opcao == '1':
             gerar_relatorio_validacao(conexao)
@@ -749,11 +778,99 @@ def main():
             query = "SELECT COUNT(*) FROM dim_tempo"
             resultado, erro = executar_query(conexao, query)
             if resultado:
-                print(f"   dim_tempo: {resultado[0][0]} registros")
+                total = resultado[0][0]
+                print(f"   dim_tempo: {total} registros")
+                # Detalhar distribuição anual/mensal
+                query_det = """
+                    SELECT 
+                        SUM(CASE WHEN mes IS NULL THEN 1 ELSE 0 END) AS anuais,
+                        SUM(CASE WHEN mes IS NOT NULL THEN 1 ELSE 0 END) AS mensais
+                    FROM dim_tempo
+                """
+                det, _ = executar_query(conexao, query_det)
+                if det:
+                    print(f"      → {det[0][0] or 0} anuais + {det[0][1] or 0} mensais")
             elif erro and 'doesn\'t exist' in str(erro):
                 print(f"   dim_tempo: não existe ainda")
+            
+            # Verificar tabelas de regiões
+            for tabela in ['dim_orgao', 'dim_regiao', 'bridge_localidade_regiao']:
+                query = f"SELECT COUNT(*) FROM `{tabela}`"
+                resultado, erro = executar_query(conexao, query)
+                if resultado:
+                    print(f"   {tabela}: {resultado[0][0]} registros")
+                elif erro and 'doesn\'t exist' in str(erro):
+                    print(f"   {tabela}: não existe ainda")
                 
         elif opcao == '5':
+            print("\n📝 VALIDAÇÃO DO MODELO DE REGIÕES POR ÓRGÃO")
+            print("-" * 50)
+            
+            # Verificar se tabelas existem
+            tabelas_regioes = ['dim_orgao', 'dim_regiao', 'bridge_localidade_regiao']
+            todas_existem = True
+            
+            for tabela in tabelas_regioes:
+                query = f"SELECT COUNT(*) FROM `{tabela}`"
+                resultado, erro = executar_query(conexao, query)
+                if resultado:
+                    print(f"   ✓ {tabela}: {resultado[0][0]} registros")
+                else:
+                    print(f"   ✗ {tabela}: NÃO EXISTE")
+                    todas_existem = False
+            
+            if todas_existem:
+                # Verificar órgãos
+                resultado, _ = executar_query(conexao, 
+                    "SELECT orgao_sigla, orgao_nome FROM dim_orgao ORDER BY orgao_id")
+                if resultado:
+                    print(f"\n   🏢 Órgãos cadastrados:")
+                    for sigla, nome in resultado:
+                        print(f"      • [{sigla}] {nome}")
+                
+                # Verificar regiões por órgão
+                resultado, _ = executar_query(conexao, """
+                    SELECT o.orgao_sigla, r.regiao_tipo, COUNT(*) as qtd
+                    FROM dim_regiao r
+                    JOIN dim_orgao o ON r.orgao_id = o.orgao_id
+                    GROUP BY o.orgao_sigla, r.regiao_tipo
+                    ORDER BY o.orgao_sigla, r.regiao_tipo
+                """)
+                if resultado:
+                    print(f"\n   🗺️ Regiões por órgão:")
+                    for sigla, tipo, qtd in resultado:
+                        print(f"      • [{sigla}] {tipo}: {qtd} regiões")
+                
+                # Verificar vínculos vigentes
+                resultado, _ = executar_query(conexao, """
+                    SELECT 
+                        COUNT(*) as total,
+                        SUM(CASE WHEN vigente_ind = TRUE THEN 1 ELSE 0 END) as vigentes,
+                        SUM(CASE WHEN vigente_ind = FALSE THEN 1 ELSE 0 END) as encerrados
+                    FROM bridge_localidade_regiao
+                """)
+                if resultado and resultado[0][0] > 0:
+                    total, vigentes, encerrados = resultado[0]
+                    print(f"\n   🔗 Vínculos localidade-região:")
+                    print(f"      Total: {total}")
+                    print(f"      Vigentes: {vigentes}")
+                    print(f"      Encerrados: {encerrados}")
+                else:
+                    print(f"\n   ⚠️ Bridge table vazia. Popular com dados iniciais.")
+                
+                # Verificar views
+                for view in ['vw_localidade_regioes_vigentes', 'vw_localidade_regioes_historico']:
+                    query = f"SELECT COUNT(*) FROM `{view}`"
+                    resultado, erro = executar_query(conexao, query)
+                    if resultado:
+                        print(f"   ✓ View {view}: {resultado[0][0]} registros")
+                    else:
+                        print(f"   ✗ View {view}: NÃO EXISTE")
+            else:
+                print(f"\n   ⚠️ Execute o script de padronização (opção 2) primeiro.")
+                print(f"   As tabelas de regiões são criadas na PARTE 7 do script.")
+                
+        elif opcao == '6':
             print("Saindo...")
             break
         else:

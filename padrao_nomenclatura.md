@@ -11,7 +11,7 @@
 ## 📋 Sumário
 
 1. [Problemas Identificados](#problemas-identificados)
-2. [Convenções Adotadas](#convenções-adotadas)
+2. [Convenções Adotadas](#convencoes-adotadas)
 3. [Nomenclatura de Tabelas](#nomenclatura-de-tabelas)
 4. [Nomenclatura de Colunas](#nomenclatura-de-colunas)
 5. [Mapeamento Completo](#mapeamento-completo)
@@ -19,12 +19,12 @@
 
 ---
 
-## ❌ Problemas Identificados
+## Problemas Identificados
 
 ### Inconsistências Atuais
 
 | Problema | Exemplos |
-|----------|----------|
+| ---------- | ---------- |
 | **Prefixos inconsistentes** | `cod_asp` vs `nota_cod` vs `Cod_loc` |
 | **Case misto** | `Cod_loc`, `PtoX`, `loc_cod` |
 | **Abreviações variadas** | `fnt` (fonte), `asp` (aspecto), `con` (consulta), `var` (variável) |
@@ -34,7 +34,7 @@
 
 ### Mapeamento de Inconsistências por Tabela
 
-```
+```text
 tb_aspecto:     cod_asp, nome_asp          (prefixo: cod_, nome_)
 tb_nota:        nota_cod, nota_nome        (prefixo: nota_)
 tb_fonte:       fnt_cod, fnt_sigla         (prefixo: fnt_)
@@ -49,7 +49,7 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 
 ---
 
-## ✅ Convenções Adotadas
+## ✅ Convenções Adotadas {#convencoes-adotadas}
 
 ### Regras Gerais
 
@@ -61,18 +61,19 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 ### Prefixos de Tabelas
 
 | Prefixo | Uso | Exemplo |
-|---------|-----|---------|
+| --------- | ----- | --------- |
 | `dim_` | Tabelas de Dimensão (DW) | `dim_localidade` |
 | `fact_` | Tabelas de Fato (DW) | `fact_dados` |
 | `rel_` | Tabelas de Relacionamento N:N | `rel_variavel_fonte` |
 | `log_` | Tabelas de Log/Auditoria | `log_busca` |
 | `cfg_` | Tabelas de Configuração | `cfg_consulta` |
 | `aux_` | Tabelas Auxiliares | `aux_localidade_pai` |
+| `bridge_` | Bridge Tables (M:N com temporalidade) | `bridge_localidade_regiao` |
 
 ### Sufixos de Colunas
 
 | Sufixo | Uso | Exemplo |
-|--------|-----|---------|
+| --------- | ----- | --------- |
 | `_id` | Chave Primária (surrogate key) | `localidade_id` |
 | `_cod` | Código Natural/Business Key | `localidade_cod` |
 | `_nome` | Nome/Descrição curta | `localidade_nome` |
@@ -88,7 +89,7 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 ### Padrão para Chaves
 
 | Tipo | Formato | Exemplo |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | **Primary Key (surrogate)** | `{tabela}_id` | `localidade_id` |
 | **Primary Key (natural)** | `{tabela}_cod` | `localidade_cod` |
 | **Foreign Key** | `{tabela_ref}_id` ou `{tabela_ref}_cod` | `localidade_id` |
@@ -96,12 +97,12 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 
 ---
 
-## 📦 Nomenclatura de Tabelas
+## 📦 Nomenclatura de Tabelas {#nomenclatura-de-tabelas}
 
 ### De-Para: Tabelas
 
 | Nome Atual | Nome Proposto | Tipo | Descrição |
-|------------|---------------|------|-----------|
+| ------------ | --------------- | ------ | ----------- |
 | `tb_aspecto` | `dim_aspecto` | Dimensão | Aspectos/categorias das variáveis |
 | `tb_nota` | `dim_nota` | Dimensão | Notas/observações das variáveis |
 | `tb_fonte` | `dim_fonte` | Dimensão | Fontes de dados |
@@ -125,19 +126,23 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 | `tb_infmun` | `aux_info_municipio` | Auxiliar | Info de municípios (vazia) |
 | `tb_var_calculado` | `cfg_variavel_calculada` | Config | Variáveis calculadas (vazia) |
 | `tb_var_produto` | `cfg_variavel_produto` | Config | Variáveis produto (vazia) |
-| `dim_tempo` | `dim_tempo` | Dimensão | Dimensão tempo (NOVA) |
+| `dim_tempo` | `dim_tempo` | Dimensão | Dimensão tempo — granularidade anual e mensal |
+| *(nova)* | `dim_orgao` | Dimensão | Órgãos que definem regionalizações |
+| *(nova)* | `dim_regiao` | Dimensão | Regiões de trabalho por órgão |
+| *(nova)* | `bridge_localidade_regiao` | Bridge | Vínculo localidade↔região com SCD Tipo 2 |
 
 ---
 
-## 📝 Nomenclatura de Colunas
+## 📝 Nomenclatura de Colunas {#nomenclatura-de-colunas}
 
 ### Padrão Geral
 
-```
+```text
 {entidade}_{atributo}[_{sufixo}]
 ```
 
 **Exemplos:**
+
 - `localidade_cod` → código da localidade
 - `variavel_nome` → nome da variável
 - `indicador_vlr` → valor do indicador
@@ -148,21 +153,21 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 #### dim_aspecto (tb_aspecto)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `cod_asp` | `aspecto_id` | PK - Código do aspecto |
 | `nome_asp` | `aspecto_nome` | Nome do aspecto |
 
 #### dim_nota (tb_nota)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `nota_cod` | `nota_id` | PK - Código da nota |
 | `nota_nome` | `nota_txt` | Texto da nota |
 
 #### dim_fonte (tb_fonte)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `fnt_cod` | `fonte_id` | PK - Código da fonte |
 | `fnt_sigla` | `fonte_sigla` | Sigla da fonte |
 | `fnt_nome` | `fonte_nome` | Nome completo da fonte |
@@ -170,14 +175,14 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 #### dim_unidade (tb_unidade)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `unid_cod` | `unidade_id` | PK - Código da unidade |
 | `unid_nome` | `unidade_nome` | Nome da unidade |
 
 #### dim_localidade (tb_localidade)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `loc_cod` | `localidade_id` | PK - Código da localidade |
 | `loc_pai` | `localidade_pai_id` | FK - Localidade pai |
 | `loc_nome` | `localidade_nome` | Nome da localidade |
@@ -193,7 +198,7 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 #### dim_variavel (tb_variavel)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `var_cod` | `variavel_id` | PK - Código da variável |
 | `var_cod_old` | `variavel_cod_legado` | Código no sistema antigo |
 | `var_ordem` | `variavel_ordem` | Ordem de exibição |
@@ -221,13 +226,14 @@ tb_rel_ter:     ter_cod, ter_tipo          (prefixo: ter_)
 #### fact_indicador (tb_dados) - ⚠️ REQUER NORMALIZAÇÃO
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `loc_cod` | `localidade_id` | PK/FK - Localidade |
 | `var_cod` | `variavel_id` | PK/FK - Variável |
 | `d_1980` a `d_2030` | **Normalizar** | Valores por ano (formatos mistos!) |
 
 **⚠️ DESCOBERTA CRÍTICA NA ANÁLISE:**
 As colunas `d_1980` a `d_2030` contêm:
+
 - 49.35% inteiros: `3, 4, 12, 17`
 - 45.88% hífen como NULL: `'-'`
 - 2.69% decimais com vírgula: `0,56, 0,52`
@@ -241,7 +247,7 @@ As colunas `d_1980` a `d_2030` contêm:
 **Estrutura Normalizada Proposta (fact_indicador):**
 
 | Coluna | Tipo | Descrição |
-|--------|------|-----------|
+| -------- | ------ | ----------- |
 | `indicador_id` | BIGINT AUTO_INCREMENT | PK - Surrogate key |
 | `localidade_id` | SMALLINT UNSIGNED | FK - Localidade |
 | `variavel_id` | SMALLINT UNSIGNED | FK - Variável |
@@ -253,6 +259,7 @@ As colunas `d_1980` a `d_2030` contêm:
 | `carga_dh` | TIMESTAMP | Data/hora da carga |
 
 **Regras de Conversão (ver funcao_conversao_dados.sql):**
+
 - `'-'` → NULL (45% dos dados)
 - `'1.234.567,89'` → `1234567.89` (formato BR com milhares)
 - `'0,56'` → `0.56` (formato BR decimal)
@@ -263,7 +270,7 @@ As colunas `d_1980` a `d_2030` contêm:
 #### dim_base_cartografica (tb_base_cart)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `cod_base` | `base_cartografica_id` | PK - Código da base |
 | `nome_base` | `base_cartografica_nome` | Nome da base |
 | `ano` | `base_ano` | Ano de referência |
@@ -272,7 +279,7 @@ As colunas `d_1980` a `d_2030` contêm:
 #### rel_base_ponto (tb_base_cart_ptos)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `Cod_loc` | `localidade_id` | PK/FK - Localidade |
 | `base` | `base_cartografica_id` | PK/FK - Base cartográfica |
 | `PtoX` | `ponto_x` | Coordenada X |
@@ -281,7 +288,7 @@ As colunas `d_1980` a `d_2030` contêm:
 #### cfg_consulta (tb_consulta)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `con_cod` | `consulta_id` | PK - Código da consulta |
 | `con_nome` | `consulta_nome` | Nome da consulta |
 | `con_usu` | `usuario_id` | FK - Usuário |
@@ -293,14 +300,14 @@ As colunas `d_1980` a `d_2030` contêm:
 #### dim_territorio (tb_rel_ter)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `ter_cod` | `territorio_id` | PK - Código do território |
 | `ter_tipo` | `territorio_tipo` | Tipo do território |
 
 #### rel_territorio_variavel (tb_rel_ter_var)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `ter_cod` | `territorio_id` | PK/FK - Território |
 | `var_cod` | `variavel_id` | PK/FK - Variável |
 | `var_tipo` | `relacao_tipo` | Tipo da relação |
@@ -308,21 +315,21 @@ As colunas `d_1980` a `d_2030` contêm:
 #### rel_variavel_fonte (tb_rel_var_fnt)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `var_cod` | `variavel_id` | PK/FK - Variável |
 | `fnt_cod` | `fonte_id` | PK/FK - Fonte |
 
 #### rel_variavel_nota (tb_rel_var_nota)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `var_cod` | `variavel_id` | PK/FK - Variável |
 | `nota_cod` | `nota_id` | PK/FK - Nota |
 
 #### aux_localidade_hierarquia (tb_loc_pai)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `loc_cod` | `localidade_id` | PK/FK - Localidade |
 | `loc_pai` | `localidade_pai_id` | FK - Localidade pai |
 | `loc_reg` | `regiao_id` | FK - Região |
@@ -330,32 +337,32 @@ As colunas `d_1980` a `d_2030` contêm:
 #### aux_localidade_historico (tb_localidade_historico)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `loc_cod` | `localidade_id` | PK/FK - Localidade |
 | `loc_historico` | `historico_txt` | Texto do histórico |
 
 #### log_busca (tb_log_busca)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `log_data` | `busca_dh` | Data/hora da busca |
 | `log_busca` | `busca_termo` | Termo buscado |
 
 #### log_erro_movimento (tb_erro_mvto)
 
 | Coluna Atual | Coluna Proposta | Descrição |
-|--------------|-----------------|-----------|
+| -------------- | ----------------- | ----------- |
 | `seq_mvto` | `movimento_seq` | Sequência do movimento |
 | `seq_cpo` | `campo_seq` | Sequência do campo |
 | `msg_erro` | `erro_msg` | Mensagem de erro |
 
 ---
 
-## 🔄 Mapeamento Completo
+## 🔄 Mapeamento Completo {#mapeamento-completo}
 
 ### Tabela de Referência Rápida
 
-```
+```text
 TABELAS:
 tb_aspecto                → dim_aspecto
 tb_nota                   → dim_nota
@@ -389,7 +396,7 @@ d_YYYY       → normalizar para tempo_id + indicador_vlr
 
 ---
 
-## 📖 Exemplos de Uso
+## 📖 Exemplos de Uso {#exemplos-de-uso}
 
 ### Consulta com Nomenclatura Antiga
 

@@ -1,10 +1,15 @@
 -- =====================================================================
 -- FUNÇÃO DE CONVERSÃO DE DADOS PARA MIGRAÇÃO
 -- Banco: imp
--- Data: 24/02/2026
+-- Data: 25/02/2026
+-- Versão: 2.0
 -- 
 -- OBJETIVO: Converter valores das colunas d_YYYY para formato numérico
 -- padronizado, tratando todos os formatos encontrados na análise
+--
+-- IMPORTANTE: Este script deve ser executado APÓS o script de
+-- padronização de nomenclatura (script_padronizacao_nomenclatura.sql)
+-- pois utiliza os nomes de tabelas/colunas já renomeados.
 -- =====================================================================
 
 DELIMITER $$
@@ -228,18 +233,34 @@ DROP TABLE IF EXISTS dim_tempo;
 
 CREATE TABLE dim_tempo (
     tempo_id INT AUTO_INCREMENT PRIMARY KEY,
-    ano SMALLINT NOT NULL,
-    decada SMALLINT GENERATED ALWAYS AS (FLOOR(ano / 10) * 10) STORED,
-    seculo SMALLINT GENERATED ALWAYS AS (FLOOR((ano - 1) / 100) + 1) STORED,
+    ano SMALLINT NOT NULL COMMENT 'Ano (1980-2030)',
+    mes TINYINT NULL COMMENT 'Mês (1-12), NULL = registro anual',
+    trimestre TINYINT NULL COMMENT 'Trimestre (1-4), NULL = registro anual',
+    semestre TINYINT NULL COMMENT 'Semestre (1-2), NULL = registro anual',
+    decada VARCHAR(10) NOT NULL COMMENT 'Década',
+    seculo TINYINT NOT NULL COMMENT 'Século',
+    ano_bissexto_ind BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'É ano bissexto?',
+    descricao VARCHAR(50) NOT NULL COMMENT 'Descrição do período',
     
-    UNIQUE KEY uk_ano (ano)
+    UNIQUE KEY uk_ano_mes (ano, mes),
+    INDEX idx_decada (decada),
+    INDEX idx_ano (ano),
+    INDEX idx_mes (mes)
     
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-COMMENT='Dimensão tempo para normalização das colunas d_YYYY';
+COMMENT='Dimensão tempo — granularidade anual e mensal';
 
--- Popular dim_tempo com anos de 1980 a 2030
-INSERT INTO dim_tempo (ano)
-SELECT DISTINCT ano_valor
+-- Popular dim_tempo com registros anuais (mes = NULL) — compatibilidade com dados existentes
+INSERT INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
+SELECT 
+    ano_valor AS ano,
+    NULL AS mes,
+    NULL AS trimestre,
+    NULL AS semestre,
+    CONCAT(FLOOR(ano_valor/10)*10, 's') AS decada,
+    CASE WHEN ano_valor < 2000 THEN 20 ELSE 21 END AS seculo,
+    (ano_valor % 4 = 0 AND (ano_valor % 100 != 0 OR ano_valor % 400 = 0)) AS ano_bissexto_ind,
+    CONCAT('Ano ', ano_valor) AS descricao
 FROM (
     SELECT 1980 + (a.n + b.n * 10) AS ano_valor
     FROM 
@@ -251,6 +272,41 @@ FROM (
     WHERE 1980 + (a.n + b.n * 10) <= 2030
 ) anos
 ORDER BY ano_valor;
+
+-- Popular dim_tempo com registros mensais (12 por ano) — granularidade expandida
+INSERT INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
+SELECT 
+    a.ano_valor AS ano,
+    m.mes,
+    CEIL(m.mes / 3) AS trimestre,
+    CEIL(m.mes / 6) AS semestre,
+    CONCAT(FLOOR(a.ano_valor/10)*10, 's') AS decada,
+    CASE WHEN a.ano_valor < 2000 THEN 20 ELSE 21 END AS seculo,
+    (a.ano_valor % 4 = 0 AND (a.ano_valor % 100 != 0 OR a.ano_valor % 400 = 0)) AS ano_bissexto_ind,
+    CONCAT(
+        CASE m.mes
+            WHEN 1 THEN 'Jan' WHEN 2 THEN 'Fev' WHEN 3 THEN 'Mar'
+            WHEN 4 THEN 'Abr' WHEN 5 THEN 'Mai' WHEN 6 THEN 'Jun'
+            WHEN 7 THEN 'Jul' WHEN 8 THEN 'Ago' WHEN 9 THEN 'Set'
+            WHEN 10 THEN 'Out' WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dez'
+        END, '/', a.ano_valor
+    ) AS descricao
+FROM (
+    SELECT 1980 + (a.n + b.n * 10) AS ano_valor
+    FROM 
+        (SELECT 0 AS n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+         UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
+    CROSS JOIN
+        (SELECT 0 AS n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+         UNION SELECT 5) b
+    WHERE 1980 + (a.n + b.n * 10) <= 2030
+) a
+CROSS JOIN (
+    SELECT 1 AS mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+    UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+    UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+) m
+ORDER BY a.ano_valor, m.mes;
 
 -- =====================================================================
 -- PROCEDURE PARA MIGRAÇÃO DOS DADOS
@@ -269,9 +325,9 @@ BEGIN
     DECLARE v_total_erros BIGINT DEFAULT 0;
     DECLARE done INT DEFAULT FALSE;
     
-    -- Cursor para iterar pelos anos
+    -- Cursor para iterar pelos anos (apenas registros anuais, mes IS NULL)
     DECLARE cur_anos CURSOR FOR 
-        SELECT ano FROM dim_tempo ORDER BY ano;
+        SELECT ano FROM dim_tempo WHERE mes IS NULL ORDER BY ano;
     
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
@@ -294,14 +350,14 @@ BEGIN
             'INSERT INTO fact_indicador ',
             '(localidade_id, variavel_id, tempo_id, indicador_txt, indicador_vlr, indicador_tipo) ',
             'SELECT ',
-            '    d.loc_cod AS localidade_id, ',
-            '    d.var_cod AS variavel_id, ',
+            '    d.localidade_id, ',
+            '    d.variavel_id, ',
             '    t.tempo_id, ',
             '    d.', v_coluna, ' AS indicador_txt, ',
             '    fn_converter_valor_numerico(d.', v_coluna, ') AS indicador_vlr, ',
             '    fn_classificar_tipo_dado(d.', v_coluna, ') AS indicador_tipo ',
-            'FROM tb_dados d ',
-            'JOIN dim_tempo t ON t.ano = ', v_ano, ' ',
+            'FROM fact_indicador_original d ',
+            'JOIN dim_tempo t ON t.ano = ', v_ano, ' AND t.mes IS NULL ',
             'WHERE d.', v_coluna, ' IS NOT NULL'
         );
         
@@ -340,18 +396,24 @@ DELIMITER ;
 /*
 1. EXECUTAR AS FUNÇÕES E TABELAS ACIMA
 
-2. TESTAR AS FUNÇÕES:
+2. PRE-REQUISITO: Executar script_padronizacao_nomenclatura.sql antes,
+   pois este script utiliza os nomes de tabelas já renomeados.
+   A tabela original fact_indicador (ex-tb_dados) deve ser renomeada
+   para fact_indicador_original antes da migração:
+   RENAME TABLE fact_indicador TO fact_indicador_original;
+
+3. TESTAR AS FUNÇÕES:
    SELECT 
        '1.234,56' AS teste,
        fn_converter_valor_numerico('1.234,56') AS valor,
        fn_classificar_tipo_dado('1.234,56') AS tipo;
 
-3. EXECUTAR A MIGRAÇÃO:
+4. EXECUTAR A MIGRAÇÃO:
    CALL sp_migrar_dados_para_fato();
    
    ⚠️ ATENÇÃO: Este processo pode demorar vários minutos!
    
-4. VERIFICAR RESULTADOS:
+5. VERIFICAR RESULTADOS:
    SELECT 
        indicador_tipo,
        COUNT(*) as qtd,
@@ -359,13 +421,14 @@ DELIMITER ;
    FROM fact_indicador
    GROUP BY indicador_tipo;
    
-5. VERIFICAR PROBLEMAS:
+6. VERIFICAR PROBLEMAS:
    SELECT *
    FROM fact_indicador
    WHERE conversao_ok = FALSE
    LIMIT 100;
 
-6. BACKUP DA TABELA ORIGINAL (APÓS MIGRAÇÃO BEM-SUCEDIDA):
-   -- Renomear tb_dados para tb_dados_original (backup)
-   RENAME TABLE tb_dados TO tb_dados_original;
+7. MANTER BACKUP:
+   A tabela fact_indicador_original contém os dados originais
+   no formato colunar (d_1980 a d_2030) e pode ser consultada
+   para auditoria.
 */

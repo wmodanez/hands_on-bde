@@ -18,7 +18,8 @@
 7. [Exercício 5 — Migração e Normalização](#7-exercício-5--migração-e-normalização)
 8. [Exercício 6 — Chaves Primárias e Estrangeiras](#8-exercício-6--chaves-primárias-e-estrangeiras)
 9. [Exercício 7 — Validação Final e Consultas](#9-exercício-7--validação-final-e-consultas)
-10. [Referência Rápida](#10-referência-rápida)
+10. [Exercício 8 — Regiões de Trabalho por Órgão](#10-exercício-8--regiões-de-trabalho-por-órgão)
+11. [Referência Rápida](#11-referência-rápida)
 
 ---
 
@@ -67,7 +68,8 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 | Exercício 5 — Migração | 1h 30min | 🔴 Avançado |
 | Exercício 6 — PKs e FKs | 1h | 🟡 Intermediário |
 | Exercício 7 — Validação Final | 45 min | 🟢 Básico |
-| **Total** | **~8h** | |
+| Exercício 8 — Regiões por Órgão | 1h 30min | 🔴 Avançado |
+| **Total** | **~9h 30min** | |
 
 ---
 
@@ -80,7 +82,7 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 3. Preencha:
 
    | Campo | Valor |
-   | ------- | -------|
+   | ------- | ------- |
    | **Host** | `10.209.59.96` |
    | **Porta** | `3306` |
    | **Database** | `imp_colabX` *(seu banco)* |
@@ -767,28 +769,78 @@ python analisar_dados_migracao.py
 ### 7.1 — Criar Dimensão Tempo
 
 ```sql
--- Criar tabela dim_tempo
+-- Criar tabela dim_tempo (granularidade anual + mensal)
 CREATE TABLE dim_tempo (
     tempo_id INT AUTO_INCREMENT PRIMARY KEY,
-    ano SMALLINT NOT NULL,
-    decada SMALLINT GENERATED ALWAYS AS (FLOOR(ano / 10) * 10) STORED,
-    seculo SMALLINT GENERATED ALWAYS AS (FLOOR((ano - 1) / 100) + 1) STORED,
-    UNIQUE KEY uk_ano (ano)
+    ano SMALLINT NOT NULL COMMENT 'Ano (1980-2030)',
+    mes TINYINT NULL COMMENT 'Mês (1-12), NULL = registro anual',
+    trimestre TINYINT NULL COMMENT 'Trimestre (1-4), NULL = registro anual',
+    semestre TINYINT NULL COMMENT 'Semestre (1-2), NULL = registro anual',
+    decada VARCHAR(10) NOT NULL COMMENT 'Década',
+    seculo TINYINT NOT NULL COMMENT 'Século',
+    ano_bissexto_ind BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'É ano bissexto?',
+    descricao VARCHAR(50) NOT NULL COMMENT 'Descrição do período',
+    UNIQUE KEY uk_ano_mes (ano, mes),
+    INDEX idx_decada (decada),
+    INDEX idx_ano (ano),
+    INDEX idx_mes (mes)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Popular com anos de 1980 a 2030
-INSERT INTO dim_tempo (ano)
+-- Etapa 1: Registros anuais (mes = NULL) — compatibilidade com dados existentes
+INSERT INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
 WITH RECURSIVE anos AS (
     SELECT 1980 AS ano
     UNION ALL
     SELECT ano + 1 FROM anos WHERE ano < 2030
 )
-SELECT ano FROM anos;
+SELECT 
+    ano,
+    NULL, NULL, NULL,
+    CONCAT(FLOOR(ano/10)*10, 's'),
+    CASE WHEN ano < 2000 THEN 20 ELSE 21 END,
+    (ano % 4 = 0 AND (ano % 100 != 0 OR ano % 400 = 0)),
+    CONCAT('Ano ', ano)
+FROM anos;
+
+-- Etapa 2: Registros mensais (12 por ano) — granularidade expandida
+INSERT INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
+WITH RECURSIVE anos AS (
+    SELECT 1980 AS ano
+    UNION ALL
+    SELECT ano + 1 FROM anos WHERE ano < 2030
+),
+meses AS (
+    SELECT 1 AS mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+    UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+    UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+)
+SELECT 
+    a.ano, m.mes,
+    CEIL(m.mes / 3),
+    CEIL(m.mes / 6),
+    CONCAT(FLOOR(a.ano/10)*10, 's'),
+    CASE WHEN a.ano < 2000 THEN 20 ELSE 21 END,
+    (a.ano % 4 = 0 AND (a.ano % 100 != 0 OR a.ano % 400 = 0)),
+    CONCAT(
+        CASE m.mes
+            WHEN 1 THEN 'Jan' WHEN 2 THEN 'Fev' WHEN 3 THEN 'Mar'
+            WHEN 4 THEN 'Abr' WHEN 5 THEN 'Mai' WHEN 6 THEN 'Jun'
+            WHEN 7 THEN 'Jul' WHEN 8 THEN 'Ago' WHEN 9 THEN 'Set'
+            WHEN 10 THEN 'Out' WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dez'
+        END, '/', a.ano
+    )
+FROM anos a
+CROSS JOIN meses m;
 
 -- Validar
-SELECT * FROM dim_tempo ORDER BY ano;
--- Esperado: 51 registros (1980 a 2030)
+SELECT mes IS NULL AS tipo, COUNT(*) AS qtd FROM dim_tempo GROUP BY (mes IS NULL);
+-- Esperado: 51 registros anuais (mes IS NULL) + 612 mensais = 663 total
+
+SELECT * FROM dim_tempo WHERE ano = 2020 ORDER BY mes;
+-- Esperado: 13 registros (1 anual + 12 mensais)
 ```
+
+> 💡 **Por que dois níveis de granularidade?** O banco atual (`fact_indicador_original`) armazena dados **apenas por ano** (colunas `d_1980` a `d_2030`). Os registros anuais (`mes IS NULL`) garantem compatibilidade com a migração atual. Os registros mensais preparam a estrutura para futuras cargas de dados com granularidade mensal — por exemplo, dados da tabela `fact_indicador_mensal` que hoje está vazia.
 
 ### 7.2 — Criar a Função de Conversão
 
@@ -937,7 +989,7 @@ SELECT
         ELSE 'numero'
     END AS indicador_tipo
 FROM fact_indicador_original f
-JOIN dim_tempo t ON t.ano = 2020
+JOIN dim_tempo t ON t.ano = 2020 AND t.mes IS NULL
 WHERE f.d_2020 IS NOT NULL;
 
 -- Validar
@@ -982,7 +1034,7 @@ SELECT
         ELSE 'numero'
     END
 FROM fact_indicador_original f
-JOIN dim_tempo t ON t.ano = 2019
+JOIN dim_tempo t ON t.ano = 2019 AND t.mes IS NULL
 WHERE f.d_2019 IS NOT NULL;
 -- Repetir para cada ano de 1980 a 2030...
 ```
@@ -1015,7 +1067,7 @@ RENAME TABLE fact_indicador_original TO fact_indicador_backup_colunar;
 
 ### ✅ Checkpoint — Migração Concluída
 
-- [ ] dim_tempo criada com 51 registros
+- [ ] dim_tempo criada com 663 registros (51 anuais + 612 mensais)
 - [ ] Função de conversão testada com todos os formatos
 - [ ] fact_indicador populada com dados de todos os anos
 - [ ] Distribuição de tipos compatível com a análise
@@ -1284,7 +1336,7 @@ WHERE l.localidade_nivel = 3
 | Todas as colunas em `snake_case` | ⬜ |
 | Zero duplicatas em chaves primárias | ⬜ |
 | Zero registros órfãos | ⬜ |
-| dim_tempo com 51 registros | ⬜ |
+| dim_tempo com 663 registros (51 anuais + 612 mensais) | ⬜ |
 | fact_indicador com ~3M registros | ⬜ |
 | Mínimo 13 PKs criadas | ⬜ |
 | Mínimo 11 FKs criadas | ⬜ |
@@ -1293,7 +1345,605 @@ WHERE l.localidade_nivel = 3
 
 ---
 
-## 10. Referência Rápida
+## 10. Exercício 8 — Regiões de Trabalho por Órgão
+
+**Objetivo:** Implementar o modelo Snowflake parcial com SCD Tipo 2 para suportar múltiplas regionalizações por órgão com rastreabilidade temporal
+
+**Duração estimada:** 1h 30min  
+**Nível:** 🔴 Avançado
+
+> 📖 Documentação de referência: `MODELO_REGIOES_TRABALHO.md`
+
+### 10.1 — Entender a Problemática
+
+No Estado de Goiás, **cada órgão define suas próprias regiões de trabalho**. Um mesmo município pertence simultaneamente a regiões de órgãos diferentes, e essas vinculações **mudam ao longo do tempo**:
+
+| Órgão | Tipo de Regionalização | Exemplo |
+| ------- | ---------------------- | ------- |
+| Estado de Goiás | Regiões de Planejamento | Metropolitana de Goiânia, Entorno do DF |
+| Secretaria de Saúde | Macro e Microrregiões | Centro-Oeste, Goiânia, Inhumas |
+| Secretaria de Segurança | RISP | RISP Capital, RISP Anápolis |
+| Secretaria de Educação | Subsecretarias Regionais | Subsecretaria de Anápolis |
+
+📝 **Perguntas para reflexão:**
+
+- O modelo estrela atual suporta adicionar a regionalização da Secretaria de Educação **sem ALTER TABLE**?
+- Se um município mudou de microrregião de saúde em 2023, como consultamos a qual microrregião ele pertencia em 2019?
+
+### 10.2 — Criar as Novas Tabelas
+
+Execute as DDLs abaixo. As tabelas já estão incluídas na PARTE 7 do `script_padronizacao_nomenclatura.sql`, mas vamos executar passo a passo para entender cada uma.
+
+**Passo 1 — `dim_orgao` (Órgãos que definem regionalizações):**
+
+```sql
+CREATE TABLE IF NOT EXISTS dim_orgao (
+    orgao_id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    orgao_nome VARCHAR(200) NOT NULL
+        COMMENT 'Nome completo do órgão',
+    orgao_sigla VARCHAR(20) NULL
+        COMMENT 'Sigla do órgão',
+    orgao_nivel ENUM('estadual', 'secretaria', 'autarquia', 'federal', 'municipal') 
+        NOT NULL DEFAULT 'secretaria'
+        COMMENT 'Nível institucional',
+    ativo_ind BOOLEAN NOT NULL DEFAULT TRUE
+        COMMENT 'Indica se o órgão está ativo',
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizacao_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (orgao_id),
+    UNIQUE KEY uk_orgao_nome (orgao_nome),
+    INDEX idx_orgao_sigla (orgao_sigla)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Dimensão Órgão - Órgãos que definem regionalizações de trabalho';
+```
+
+📝 **Observe:**
+
+- `orgao_nivel` usa `ENUM` — limitando valores válidos no nível do banco
+- `UNIQUE KEY uk_orgao_nome` — impede duplicação de órgãos
+
+**Passo 2 — `dim_regiao` (Regiões de trabalho genéricas, com hierarquia):**
+
+```sql
+CREATE TABLE IF NOT EXISTS dim_regiao (
+    regiao_id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    orgao_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Órgão dono desta regionalização',
+    regiao_pai_id SMALLINT UNSIGNED NULL
+        COMMENT 'FK - Região pai (auto-referência para multi-nível)',
+    regiao_nome VARCHAR(200) NOT NULL
+        COMMENT 'Nome da região',
+    regiao_sigla VARCHAR(20) NULL,
+    regiao_nivel TINYINT UNSIGNED NOT NULL DEFAULT 1
+        COMMENT 'Nível hierárquico (1=macro, 2=micro, 3=local)',
+    regiao_tipo VARCHAR(50) NULL
+        COMMENT 'Tipo descritivo (Região de Planejamento, Macrorregião, etc.)',
+    regiao_cod_externo VARCHAR(20) NULL
+        COMMENT 'Código em sistema externo (IBGE, SUS, etc.)',
+    ativa_ind BOOLEAN NOT NULL DEFAULT TRUE,
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizacao_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (regiao_id),
+    INDEX idx_regiao_orgao (orgao_id),
+    INDEX idx_regiao_pai (regiao_pai_id),
+    INDEX idx_regiao_tipo (regiao_tipo),
+    
+    CONSTRAINT fk_regiao_orgao FOREIGN KEY (orgao_id) 
+        REFERENCES dim_orgao (orgao_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_regiao_pai FOREIGN KEY (regiao_pai_id) 
+        REFERENCES dim_regiao (regiao_id) ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Dimensão Região - Regiões de trabalho com hierarquia multi-nível';
+```
+
+📝 **Observe:**
+
+- `regiao_pai_id` é uma **auto-referência** — permite hierarquia Macro → Micro → Local
+- `regiao_cod_externo` — guarda o código do sistema de origem (ex.: código SUS da macrorregião)
+- A FK `fk_regiao_orgao` garante que toda região pertence a um órgão válido
+
+**Passo 3 — `bridge_localidade_regiao` (Vínculo com temporalidade SCD Tipo 2):**
+
+```sql
+CREATE TABLE IF NOT EXISTS bridge_localidade_regiao (
+    vinculo_id INT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    localidade_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Localidade (município)',
+    regiao_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Região de trabalho',
+    vigencia_inicio_dt DATE NOT NULL
+        COMMENT 'Data de início da vigência',
+    vigencia_fim_dt DATE NULL
+        COMMENT 'Data de fim da vigência (NULL = vigente)',
+    vigente_ind BOOLEAN GENERATED ALWAYS AS (vigencia_fim_dt IS NULL) STORED
+        COMMENT 'Flag de conveniência: TRUE se vigente',
+    motivo_alteracao_txt VARCHAR(500) NULL
+        COMMENT 'Motivo da mudança de região',
+    norma_legal_txt VARCHAR(200) NULL
+        COMMENT 'Decreto/Lei/Portaria que definiu a mudança',
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    PRIMARY KEY (vinculo_id),
+    INDEX idx_bridge_localidade (localidade_id),
+    INDEX idx_bridge_regiao (regiao_id),
+    INDEX idx_bridge_vigente (vigente_ind),
+    INDEX idx_bridge_vigencia (vigencia_inicio_dt, vigencia_fim_dt),
+    UNIQUE KEY uk_bridge_vigencia (localidade_id, regiao_id, vigencia_inicio_dt),
+    
+    CONSTRAINT fk_bridge_localidade FOREIGN KEY (localidade_id) 
+        REFERENCES dim_localidade (localidade_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_bridge_regiao FOREIGN KEY (regiao_id) 
+        REFERENCES dim_regiao (regiao_id) ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Bridge Table - Vínculo localidade↔região com temporalidade (SCD Tipo 2)';
+```
+
+📝 **Conceitos importantes:**
+
+- `vigente_ind` é uma **coluna GENERATED** — calculada automaticamente pelo MySQL
+- `vigencia_fim_dt = NULL` significa **vigente**; com data preenchida significa **encerrado**
+- A `UNIQUE KEY` impede que a mesma localidade entre na mesma região duas vezes na mesma data
+
+### 10.3 — Validar a Estrutura
+
+```sql
+-- Verificar que as 3 tabelas foram criadas
+SELECT TABLE_NAME, TABLE_COMMENT
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME IN ('dim_orgao', 'dim_regiao', 'bridge_localidade_regiao');
+-- Esperado: 3 linhas
+
+-- Verificar a coluna GENERATED
+SHOW COLUMNS FROM bridge_localidade_regiao WHERE Field = 'vigente_ind';
+-- Esperado: Extra = STORED GENERATED
+
+-- Verificar FKs criadas
+SELECT CONSTRAINT_NAME, TABLE_NAME, REFERENCED_TABLE_NAME
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME IN ('dim_regiao', 'bridge_localidade_regiao')
+  AND REFERENCED_TABLE_NAME IS NOT NULL;
+-- Esperado: 4 FKs (fk_regiao_orgao, fk_regiao_pai, fk_bridge_localidade, fk_bridge_regiao)
+```
+
+### 10.4 — Popular com Dados Reais
+
+> 📖 O script completo está em `migrar_dados_regioes.sql`. Aqui executamos passo a passo.
+
+**Passo 1 — Inserir órgãos:**
+
+```sql
+INSERT INTO dim_orgao (orgao_nome, orgao_sigla, orgao_nivel) VALUES
+    ('Estado de Goiás', 'GO', 'estadual'),
+    ('Secretaria de Estado da Saúde', 'SES-GO', 'secretaria');
+-- SSP, Educação e outros podem ser adicionados depois
+
+-- Validar
+SELECT * FROM dim_orgao;
+-- Esperado: 2 registros
+```
+
+**Passo 2 — Migrar Regiões de Planejamento (Estado):**
+
+```sql
+-- Extrair regiões de planejamento distintas da dim_localidade
+INSERT INTO dim_regiao (orgao_id, regiao_nome, regiao_nivel, regiao_tipo, regiao_cod_externo)
+SELECT DISTINCT
+    (SELECT orgao_id FROM dim_orgao WHERE orgao_sigla = 'GO'),
+    CONCAT('Região de Planejamento ', regiao_planejamento_id),
+    1,
+    'Região de Planejamento',
+    CAST(regiao_planejamento_id AS CHAR)
+FROM dim_localidade
+WHERE regiao_planejamento_id IS NOT NULL;
+
+-- Validar
+SELECT * FROM dim_regiao WHERE regiao_tipo = 'Região de Planejamento';
+```
+
+📝 **Observe:** Usamos `regiao_cod_externo` para guardar o ID original da dim_localidade — será usado no próximo passo para fazer a ligação na bridge.
+
+**Passo 3 — Migrar Regiões de Saúde (Macro e Micro):**
+
+```sql
+-- 3a. Macrorregiões de Saúde (nível 1)
+INSERT INTO dim_regiao (orgao_id, regiao_nome, regiao_nivel, regiao_tipo, regiao_cod_externo)
+SELECT DISTINCT
+    (SELECT orgao_id FROM dim_orgao WHERE orgao_sigla = 'SES-GO'),
+    regiao_macro_saude_nome,
+    1,
+    'Macrorregião de Saúde',
+    CAST(regiao_macro_saude_id AS CHAR)
+FROM aux_localidade_regiao_saude
+WHERE regiao_macro_saude_nome IS NOT NULL
+  AND TRIM(regiao_macro_saude_nome) != '';
+
+-- 3b. Microrregiões de Saúde (nível 2, com pai = macrorregião)
+INSERT INTO dim_regiao (orgao_id, regiao_pai_id, regiao_nome, regiao_nivel, regiao_tipo, regiao_cod_externo)
+SELECT DISTINCT
+    (SELECT orgao_id FROM dim_orgao WHERE orgao_sigla = 'SES-GO'),
+    r_macro.regiao_id,
+    ars.regiao_micro_saude_nome,
+    2,
+    'Microrregião de Saúde',
+    CAST(ars.regiao_micro_saude_id AS CHAR)
+FROM aux_localidade_regiao_saude ars
+JOIN dim_regiao r_macro 
+    ON r_macro.regiao_cod_externo = CAST(ars.regiao_macro_saude_id AS CHAR)
+    AND r_macro.regiao_tipo = 'Macrorregião de Saúde'
+WHERE ars.regiao_micro_saude_nome IS NOT NULL
+  AND TRIM(ars.regiao_micro_saude_nome) != '';
+
+-- Validar hierarquia
+SELECT 
+    r.regiao_tipo,
+    r.regiao_nome,
+    rp.regiao_nome AS regiao_pai
+FROM dim_regiao r
+LEFT JOIN dim_regiao rp ON r.regiao_pai_id = rp.regiao_id
+WHERE r.orgao_id = (SELECT orgao_id FROM dim_orgao WHERE orgao_sigla = 'SES-GO')
+ORDER BY r.regiao_nivel, r.regiao_nome;
+```
+
+📝 **Pergunta para reflexão:** O que acontece no JOIN da microrregião se houver uma macrorregião_id na tabela de saúde que não foi inserida no passo 3a? (Dica: o JOIN impede o INSERT — protege a integridade)
+
+**Passo 4 — Popular a Bridge com vínculos atuais:**
+
+```sql
+-- 4a. Vínculos de Região de Planejamento
+INSERT INTO bridge_localidade_regiao 
+    (localidade_id, regiao_id, vigencia_inicio_dt, motivo_alteracao_txt)
+SELECT 
+    l.localidade_id,
+    r.regiao_id,
+    '2000-01-01',
+    'Carga inicial - migração do modelo anterior'
+FROM dim_localidade l
+JOIN dim_regiao r 
+    ON r.regiao_cod_externo = CAST(l.regiao_planejamento_id AS CHAR)
+    AND r.regiao_tipo = 'Região de Planejamento'
+WHERE l.regiao_planejamento_id IS NOT NULL;
+
+-- 4b. Vínculos de Macrorregião de Saúde
+INSERT INTO bridge_localidade_regiao 
+    (localidade_id, regiao_id, vigencia_inicio_dt, motivo_alteracao_txt)
+SELECT 
+    l.localidade_id,
+    r.regiao_id,
+    '2000-01-01',
+    'Carga inicial - migração do modelo anterior'
+FROM dim_localidade l
+JOIN aux_localidade_regiao_saude ars 
+    ON l.localidade_cod_ibge = ars.localidade_cod_ibge
+JOIN dim_regiao r 
+    ON r.regiao_cod_externo = CAST(ars.regiao_macro_saude_id AS CHAR)
+    AND r.regiao_tipo = 'Macrorregião de Saúde'
+WHERE ars.regiao_macro_saude_id IS NOT NULL;
+
+-- 4c. Vínculos de Microrregião de Saúde
+INSERT INTO bridge_localidade_regiao 
+    (localidade_id, regiao_id, vigencia_inicio_dt, motivo_alteracao_txt)
+SELECT 
+    l.localidade_id,
+    r.regiao_id,
+    '2000-01-01',
+    'Carga inicial - migração do modelo anterior'
+FROM dim_localidade l
+JOIN aux_localidade_regiao_saude ars 
+    ON l.localidade_cod_ibge = ars.localidade_cod_ibge
+JOIN dim_regiao r 
+    ON r.regiao_cod_externo = CAST(ars.regiao_micro_saude_id AS CHAR)
+    AND r.regiao_tipo = 'Microrregião de Saúde'
+WHERE ars.regiao_micro_saude_id IS NOT NULL;
+
+-- Validar
+SELECT 
+    r.regiao_tipo,
+    COUNT(*) AS vinculos,
+    SUM(b.vigente_ind) AS vigentes
+FROM bridge_localidade_regiao b
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+GROUP BY r.regiao_tipo
+ORDER BY r.regiao_tipo;
+```
+
+### 10.5 — Criar Procedure de Movimentação
+
+```sql
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS sp_mover_localidade_regiao$$
+
+CREATE PROCEDURE sp_mover_localidade_regiao(
+    IN p_localidade_id SMALLINT UNSIGNED,
+    IN p_nova_regiao_id SMALLINT UNSIGNED,
+    IN p_data_mudanca DATE,
+    IN p_motivo VARCHAR(500),
+    IN p_norma_legal VARCHAR(200)
+)
+BEGIN
+    DECLARE v_orgao_id SMALLINT UNSIGNED;
+    DECLARE v_nivel TINYINT UNSIGNED;
+    DECLARE v_vinculo_anterior INT UNSIGNED;
+    
+    -- 1. Obter órgão e nível da nova região
+    SELECT orgao_id, regiao_nivel 
+    INTO v_orgao_id, v_nivel
+    FROM dim_regiao 
+    WHERE regiao_id = p_nova_regiao_id;
+    
+    -- 2. Encontrar vínculo vigente anterior (mesmo órgão e nível)
+    SELECT b.vinculo_id
+    INTO v_vinculo_anterior
+    FROM bridge_localidade_regiao b
+    JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+    WHERE b.localidade_id = p_localidade_id
+      AND r.orgao_id = v_orgao_id
+      AND r.regiao_nivel = v_nivel
+      AND b.vigente_ind = TRUE
+    LIMIT 1;
+    
+    -- 3. Encerrar vínculo anterior (se existir)
+    IF v_vinculo_anterior IS NOT NULL THEN
+        UPDATE bridge_localidade_regiao
+        SET vigencia_fim_dt = DATE_SUB(p_data_mudanca, INTERVAL 1 DAY)
+        WHERE vinculo_id = v_vinculo_anterior;
+    END IF;
+    
+    -- 4. Criar novo vínculo
+    INSERT INTO bridge_localidade_regiao 
+        (localidade_id, regiao_id, vigencia_inicio_dt, 
+         motivo_alteracao_txt, norma_legal_txt)
+    VALUES 
+        (p_localidade_id, p_nova_regiao_id, p_data_mudanca, 
+         p_motivo, p_norma_legal);
+    
+    SELECT CONCAT('✅ Localidade ', p_localidade_id, 
+                   ' movida para região ', p_nova_regiao_id,
+                   ' a partir de ', p_data_mudanca) AS resultado;
+END$$
+
+DELIMITER ;
+```
+
+📝 **Passo a passo da procedure:**
+
+1. Descobre a qual órgão e nível pertence a nova região
+2. Procura se já existe um vínculo vigente para aquele município, no mesmo órgão e nível
+3. Se existe, **encerra** o vínculo anterior (preenche `vigencia_fim_dt`)
+4. Cria o **novo vínculo** com `vigencia_inicio_dt` = data da mudança
+
+### 10.6 — Testar a Movimentação
+
+Vamos simular que o município de Itaberaí (ajuste o `localidade_id` conforme seu banco) mudou de microrregião de saúde em 2023:
+
+```sql
+-- 1. Consultar situação atual de um município
+SELECT 
+    l.localidade_nome,
+    o.orgao_sigla,
+    r.regiao_tipo,
+    r.regiao_nome,
+    b.vigencia_inicio_dt,
+    CASE WHEN b.vigente_ind THEN '✅ Vigente' ELSE '⏹️ Encerrado' END AS status
+FROM bridge_localidade_regiao b
+JOIN dim_localidade l ON b.localidade_id = l.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id
+WHERE l.localidade_nome LIKE '%Itabera%'
+ORDER BY o.orgao_sigla, r.regiao_nivel;
+
+-- 2. Obter o regiao_id da nova microrregião (Inhumas)
+SELECT regiao_id, regiao_nome 
+FROM dim_regiao 
+WHERE regiao_nome LIKE '%Inhumas%' 
+  AND regiao_tipo = 'Microrregião de Saúde';
+-- Anotar o regiao_id retornado
+
+-- 3. Executar movimentação
+-- ⚠️ Substituir os IDs conforme seu banco!
+CALL sp_mover_localidade_regiao(
+    52,                                    -- localidade_id (Itaberaí)
+    @regiao_inhumas_id,                    -- regiao_id (substituir pelo valor real)
+    '2023-01-01',                          -- data da mudança
+    'Redistritamento sanitário 2023',      -- motivo
+    'Portaria SES/GO nº 123/2022'          -- norma legal
+);
+
+-- 4. Consultar o HISTÓRICO após movimentação
+SELECT 
+    l.localidade_nome,
+    r.regiao_tipo,
+    r.regiao_nome,
+    b.vigencia_inicio_dt,
+    b.vigencia_fim_dt,
+    CASE WHEN b.vigente_ind THEN '✅ Vigente' ELSE '⏹️ Encerrado' END AS status,
+    b.motivo_alteracao_txt
+FROM bridge_localidade_regiao b
+JOIN dim_localidade l ON b.localidade_id = l.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+WHERE l.localidade_nome LIKE '%Itabera%'
+  AND r.regiao_tipo = 'Microrregião de Saúde'
+ORDER BY b.vigencia_inicio_dt;
+```
+
+**Resultado esperado:**
+
+| localidade_nome | regiao_nome | vigencia_inicio | vigencia_fim | status | motivo |
+| ----------------- | ------------- | ----------------- | -------------- | -------- | -------- |
+| Itaberaí | Goiânia | 2000-01-01 | 2022-12-31 | ⏹️ Encerrado | Carga inicial |
+| Itaberaí | Inhumas | 2023-01-01 | NULL | ✅ Vigente | Redistritamento sanitário 2023 |
+
+### 10.7 — Criar Views de Conveniência
+
+```sql
+-- View 1: Regiões vigentes (para consultas do dia-a-dia)
+CREATE OR REPLACE VIEW vw_localidade_regioes_vigentes AS
+SELECT 
+    l.localidade_id,
+    l.localidade_nome,
+    l.localidade_cod_ibge,
+    o.orgao_id,
+    o.orgao_nome,
+    o.orgao_sigla,
+    r.regiao_id,
+    r.regiao_nome,
+    r.regiao_nivel,
+    r.regiao_tipo,
+    b.vigencia_inicio_dt
+FROM dim_localidade l
+JOIN bridge_localidade_regiao b ON l.localidade_id = b.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id
+WHERE b.vigente_ind = TRUE;
+
+-- View 2: Histórico completo (para consultas por data de referência)
+CREATE OR REPLACE VIEW vw_localidade_regioes_historico AS
+SELECT 
+    l.localidade_id,
+    l.localidade_nome,
+    l.localidade_cod_ibge,
+    o.orgao_id,
+    o.orgao_nome,
+    o.orgao_sigla,
+    r.regiao_id,
+    r.regiao_nome,
+    r.regiao_nivel,
+    r.regiao_tipo,
+    b.vigencia_inicio_dt,
+    b.vigencia_fim_dt,
+    b.vigente_ind,
+    b.motivo_alteracao_txt
+FROM dim_localidade l
+JOIN bridge_localidade_regiao b ON l.localidade_id = b.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id;
+
+-- Testar view vigentes
+SELECT orgao_sigla, regiao_tipo, regiao_nome, COUNT(*) AS municipios
+FROM vw_localidade_regioes_vigentes
+GROUP BY orgao_sigla, regiao_tipo, regiao_nome
+ORDER BY orgao_sigla, regiao_tipo, regiao_nome;
+```
+
+### 10.8 — Consultas Avançadas com o Modelo de Regiões
+
+**Consulta 1 — Indicadores agregados por macrorregião de saúde:**
+
+```sql
+SELECT 
+    r.regiao_nome AS macrorregiao,
+    COUNT(DISTINCT l.localidade_id) AS qtd_municipios,
+    COUNT(f.indicador_id) AS qtd_indicadores,
+    SUM(f.indicador_vlr) AS total,
+    AVG(f.indicador_vlr) AS media
+FROM fact_indicador f
+JOIN dim_localidade l ON f.localidade_id = l.localidade_id
+JOIN dim_tempo t ON f.tempo_id = t.tempo_id
+JOIN bridge_localidade_regiao b ON l.localidade_id = b.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id
+WHERE t.ano = 2020
+  AND o.orgao_sigla = 'SES-GO'
+  AND r.regiao_tipo = 'Macrorregião de Saúde'
+  AND f.indicador_tipo = 'numero'
+  AND '2020-06-15' BETWEEN b.vigencia_inicio_dt 
+      AND COALESCE(b.vigencia_fim_dt, '9999-12-31')
+GROUP BY r.regiao_nome
+ORDER BY total DESC;
+```
+
+**Consulta 2 — Municípios de uma microrregião em uma data específica:**
+
+```sql
+-- Quais municípios pertenciam à Microrregião "Goiânia" em junho de 2019?
+SELECT 
+    l.localidade_nome,
+    l.localidade_cod_ibge
+FROM bridge_localidade_regiao b
+JOIN dim_localidade l ON b.localidade_id = l.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+WHERE r.regiao_nome = 'Goiânia'
+  AND r.regiao_tipo = 'Microrregião de Saúde'
+  AND '2019-06-15' BETWEEN b.vigencia_inicio_dt 
+      AND COALESCE(b.vigencia_fim_dt, '9999-12-31')
+ORDER BY l.localidade_nome;
+```
+
+**Consulta 3 — Comparar composição de uma região em dois momentos:**
+
+```sql
+-- Municípios que SAÍRAM de uma microrregião entre 2019 e 2024
+SELECT 
+    l.localidade_nome,
+    b.vigencia_inicio_dt,
+    b.vigencia_fim_dt,
+    b.motivo_alteracao_txt
+FROM bridge_localidade_regiao b
+JOIN dim_localidade l ON b.localidade_id = l.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+WHERE r.regiao_nome = 'Goiânia'
+  AND r.regiao_tipo = 'Microrregião de Saúde'
+  AND b.vigencia_fim_dt BETWEEN '2019-01-01' AND '2024-12-31'
+ORDER BY b.vigencia_fim_dt;
+```
+
+### 10.9 — Validação com Python
+
+Execute o script de validação para verificar o modelo de regiões:
+
+```bash
+python validar_refatoracao.py
+# Escolha a opção 5: "Validar modelo de regiões por órgão"
+```
+
+### 10.10 — Limpeza (Opcional — apenas após validação completa)
+
+> ⚠️ **SOMENTE** execute esta etapa se toda a migração foi validada com sucesso e os vínculos na bridge estão corretos.
+
+```sql
+-- Remover colunas de região fixa da dim_localidade
+-- (os dados agora vivem na bridge_localidade_regiao)
+ALTER TABLE dim_localidade
+    DROP COLUMN regiao_planejamento_id,
+    DROP COLUMN regiao_macro_saude_id,
+    DROP COLUMN regiao_micro_saude_id;
+```
+
+### ✅ Checkpoint — Modelo de Regiões Implementado
+
+- [ ] 3 novas tabelas criadas (`dim_orgao`, `dim_regiao`, `bridge_localidade_regiao`)
+- [ ] Órgãos cadastrados (mínimo 2: GO e SES)
+- [ ] Regiões de planejamento migradas
+- [ ] Macrorregiões e microrregiões de saúde migradas com hierarquia
+- [ ] Bridge populada com vínculos vigentes
+- [ ] Procedure `sp_mover_localidade_regiao` testada
+- [ ] Teste de movimentação gera histórico correto (SCD Tipo 2)
+- [ ] Views `vw_localidade_regioes_vigentes` e `vw_localidade_regioes_historico` funcionando
+- [ ] Consulta de indicadores por região retorna dados consistentes
+
+### 📝 Entregável do Exercício 8
+
+| Critério | Status |
+| ---------- | -------- |
+| `dim_orgao` com ≥ 2 órgãos | ⬜ |
+| `dim_regiao` com regiões de planejamento + saúde (macro e micro) | ⬜ |
+| `bridge_localidade_regiao` com vínculos vigentes | ⬜ |
+| Hierarquia Macro→Micro funcionando (`regiao_pai_id`) | ⬜ |
+| Movimentação via procedure testada | ⬜ |
+| Histórico com SCD Tipo 2 (encerrado + vigente) | ⬜ |
+| Views criadas e retornando dados | ⬜ |
+| Consulta por data de referência funciona | ⬜ |
+
+---
+
+## 11. Referência Rápida
 
 ### Arquivos do Projeto
 
@@ -1303,38 +1953,133 @@ WHERE l.localidade_nivel = 3
 | `validar_refatoracao.py` | Validação automática da estrutura |
 | `analisar_dados_migracao.py` | Análise de tipos de dados nas colunas d_YYYY |
 | `funcao_conversao_dados.sql` | Funções SQL + procedure de migração |
-| `script_padronizacao_nomenclatura.sql` | Script completo de renomeação |
+| `script_padronizacao_nomenclatura.sql` | Script completo de renomeação + criação de estruturas |
+| `migrar_dados_regioes.sql` | Migração de dados para o modelo de regiões por órgão |
 | `padrao_nomenclatura.md` | Documentação do padrão de nomenclatura |
 | `RELATORIO_ANALISE_DADOS.md` | Relatório detalhado da análise de dados |
 | `CRONOGRAMA_IMPLEMENTACAO.md` | Cronograma completo do projeto |
+| `MODELO_REGIOES_TRABALHO.md` | Evolução do modelo: regiões de trabalho por órgão (Snowflake + SCD Tipo 2) |
 
-### Modelo Estrela (Star Schema)
+### Modelo Estrela com Snowflake Parcial (Regiões)
 
-```flow
-                    ┌──────────────────┐
-                    │   dim_aspecto    │
-                    │   aspecto_id PK  │
-                    │   aspecto_nome   │
-                    └────────┬─────────┘
-                             │
-┌──────────────────┐    ┌────┴──────────────┐    ┌──────────────────┐
-│   dim_unidade    │    │   dim_variavel    │    │   dim_fonte      │
-│   unidade_id PK  ├────┤   variavel_id PK  ├────┤   fonte_id PK    │
-│   unidade_nome   │    │   variavel_nome   │    │   fonte_nome     │
-└──────────────────┘    │   unidade_id FK   │    └──────────────────┘
-                        │   aspecto_id FK   │
-                        └────────┬──────────┘
-                                 │
-┌──────────────────┐    ┌────────┴──────────┐    ┌──────────────────┐
-│  dim_localidade  │    │  fact_indicador   │    │    dim_tempo     │
-│  localidade_id PK├────┤  indicador_id PK  ├────┤  tempo_id PK    │
-│  localidade_nome │    │  localidade_id FK │    │  ano             │
-│  localidade_nivel│    │  variavel_id FK   │    │  decada          │
-└──────────────────┘    │  tempo_id FK      │    └──────────────────┘
-                        │  indicador_vlr    │
-                        │  indicador_txt    │
-                        │  indicador_tipo   │
-                        └───────────────────┘
+```mermaid
+erDiagram
+    dim_aspecto {
+        int aspecto_id PK
+        varchar aspecto_nome
+    }
+
+    dim_unidade {
+        smallint unidade_id PK
+        varchar unidade_nome
+    }
+
+    dim_fonte {
+        smallint fonte_id PK
+        varchar fonte_sigla
+        varchar fonte_nome
+    }
+
+    dim_nota {
+        smallint nota_id PK
+        text nota_txt
+    }
+
+    dim_variavel {
+        smallint variavel_id PK
+        varchar variavel_nome
+        smallint unidade_id FK
+        int aspecto_id FK
+        year variavel_ultimo_ano
+    }
+
+    dim_localidade {
+        smallint localidade_id PK
+        varchar localidade_nome
+        tinyint localidade_nivel
+        varchar localidade_cod_ibge
+        smallint localidade_pai_id FK
+    }
+
+    dim_tempo {
+        int tempo_id PK
+        year ano
+        tinyint mes
+        tinyint trimestre
+        tinyint semestre
+        varchar decada
+        tinyint seculo
+        boolean ano_bissexto_ind
+        varchar descricao
+    }
+
+    fact_indicador {
+        bigint indicador_id PK
+        smallint localidade_id FK
+        smallint variavel_id FK
+        int tempo_id FK
+        decimal indicador_vlr
+        varchar indicador_txt
+        enum indicador_tipo
+    }
+
+    dim_orgao {
+        smallint orgao_id PK
+        varchar orgao_nome
+        varchar orgao_sigla
+        enum orgao_nivel
+        boolean ativo_ind
+    }
+
+    dim_regiao {
+        smallint regiao_id PK
+        smallint orgao_id FK
+        smallint regiao_pai_id FK
+        varchar regiao_nome
+        tinyint regiao_nivel
+        varchar regiao_tipo
+        varchar regiao_cod_externo
+    }
+
+    bridge_localidade_regiao {
+        int vinculo_id PK
+        smallint localidade_id FK
+        smallint regiao_id FK
+        date vigencia_inicio_dt
+        date vigencia_fim_dt
+        boolean vigente_ind
+        varchar motivo_alteracao_txt
+        varchar norma_legal_txt
+    }
+
+    rel_variavel_fonte {
+        smallint variavel_id FK
+        smallint fonte_id FK
+    }
+
+    rel_variavel_nota {
+        smallint variavel_id FK
+        smallint nota_id FK
+    }
+
+    %% ── Modelo Estrela ──────────────────────────────────
+    dim_variavel }o--|| dim_aspecto       : "aspecto_id"
+    dim_variavel }o--|| dim_unidade       : "unidade_id"
+    fact_indicador }o--|| dim_variavel    : "variavel_id"
+    fact_indicador }o--|| dim_localidade  : "localidade_id"
+    fact_indicador }o--|| dim_tempo       : "tempo_id"
+
+    %% ── Relacionamentos N:N ────────────────────────────
+    rel_variavel_fonte }o--|| dim_variavel : "variavel_id"
+    rel_variavel_fonte }o--|| dim_fonte    : "fonte_id"
+    rel_variavel_nota  }o--|| dim_variavel : "variavel_id"
+    rel_variavel_nota  }o--|| dim_nota     : "nota_id"
+
+    %% ── Snowflake Parcial: Regiões (SCD Tipo 2) ────────
+    dim_orgao          ||--o{ dim_regiao               : "define regiões"
+    dim_regiao         }o--o| dim_regiao               : "pai (multi-nível)"
+    dim_localidade     ||--o{ bridge_localidade_regiao : "pertence a"
+    dim_regiao         ||--o{ bridge_localidade_regiao : "agrupa"
 ```
 
 ### Comandos Úteis
@@ -1368,4 +2113,4 @@ Em caso de problemas durante o hands-on:
 
 ---
 
-**Bom trabalho! 🚀**
+## Bom trabalho! 🚀

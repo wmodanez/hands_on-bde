@@ -1,10 +1,12 @@
 """
 Script de Análise de Dados para Migração
 Banco de dados: imp
-Data: 24/02/2026
+Data: 25/02/2026
+Versão: 2.0
 
 Objetivo: Analisar os tipos de dados reais nas tabelas antes da migração,
-especialmente nas colunas d_1980 a d_2030 da tb_dados.
+especialmente nas colunas d_1980 a d_2030 da tabela de dados.
+Compativel com nomenclatura antiga (tb_dados) e nova (fact_indicador).
 """
 
 import mysql.connector
@@ -20,6 +22,49 @@ CONFIG = {
     'password': '123456',
     'database': 'imp'
 }
+
+# Mapeamento de nomes de tabelas/colunas: antigo -> novo
+NOMES_TABELAS = {
+    'tb_dados': 'fact_indicador',
+    'tb_variavel': 'dim_variavel',
+    'tb_localidade': 'dim_localidade',
+}
+
+NOMES_COLUNAS = {
+    'var_cod': 'variavel_id',
+    'var_nome': 'variavel_nome',
+    'loc_cod': 'localidade_id',
+    'loc_nome': 'localidade_nome',
+}
+
+
+def detectar_nomenclatura(conexao):
+    """Detecta se o banco usa nomenclatura antiga ou nova"""
+    cursor = conexao.cursor()
+    cursor.execute("""
+        SELECT TABLE_NAME FROM information_schema.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('tb_dados', 'fact_indicador')
+    """)
+    tabelas = [r[0] for r in cursor.fetchall()]
+    cursor.close()
+    
+    if 'fact_indicador' in tabelas:
+        return 'nova'
+    return 'antiga'
+
+
+def nome_tabela(nome_antigo, nomenclatura):
+    """Retorna o nome correto da tabela conforme nomenclatura em uso"""
+    if nomenclatura == 'nova':
+        return NOMES_TABELAS.get(nome_antigo, nome_antigo)
+    return nome_antigo
+
+
+def nome_coluna(nome_antigo, nomenclatura):
+    """Retorna o nome correto da coluna conforme nomenclatura em uso"""
+    if nomenclatura == 'nova':
+        return NOMES_COLUNAS.get(nome_antigo, nome_antigo)
+    return nome_antigo
 
 
 def conectar():
@@ -81,11 +126,11 @@ def classificar_valor(valor):
     return 'OUTRO'
 
 
-def analisar_coluna_dados(conexao, coluna):
-    """Analisa uma coluna específica da tabela tb_dados"""
+def analisar_coluna_dados(conexao, coluna, tabela_dados):
+    """Analisa uma coluna específica da tabela de dados"""
     query = f"""
     SELECT `{coluna}`, COUNT(*) as qtd
-    FROM tb_dados
+    FROM `{tabela_dados}`
     WHERE `{coluna}` IS NOT NULL AND `{coluna}` != ''
     GROUP BY `{coluna}`
     ORDER BY qtd DESC
@@ -110,16 +155,21 @@ def analisar_coluna_dados(conexao, coluna):
 
 
 def analisar_tb_dados_completa(conexao):
-    """Analisa todas as colunas d_YYYY da tb_dados"""
+    """Analisa todas as colunas d_YYYY da tabela de dados"""
     print("=" * 80)
-    print("ANÁLISE DETALHADA DA TABELA tb_dados")
+    print("ANÁLISE DETALHADA DA TABELA DE DADOS")
     print("=" * 80)
+    
+    # Detectar nomenclatura
+    nomenclatura = detectar_nomenclatura(conexao)
+    tabela_dados = nome_tabela('tb_dados', nomenclatura)
+    print(f"\n📖 Nomenclatura detectada: {nomenclatura.upper()} (tabela: {tabela_dados})")
     
     # Obter total de registros
     cursor = conexao.cursor()
-    cursor.execute("SELECT COUNT(*) FROM tb_dados")
+    cursor.execute(f"SELECT COUNT(*) FROM `{tabela_dados}`")
     total_registros = cursor.fetchone()[0]
-    print(f"\n📊 Total de registros na tb_dados: {total_registros:,}")
+    print(f"\n📊 Total de registros: {total_registros:,}")
     
     # Analisar cada ano
     anos = range(1980, 2031)
@@ -133,14 +183,14 @@ def analisar_tb_dados_completa(conexao):
         # Contar valores não vazios
         cursor.execute(f"""
             SELECT COUNT(*) 
-            FROM tb_dados 
+            FROM `{tabela_dados}`
             WHERE `{coluna}` IS NOT NULL AND `{coluna}` != ''
         """)
         valores_preenchidos = cursor.fetchone()[0]
         
         if valores_preenchidos > 0:
             print(f"   Analisando {coluna}... ({valores_preenchidos:,} valores)")
-            classificacao = analisar_coluna_dados(conexao, coluna)
+            classificacao = analisar_coluna_dados(conexao, coluna, tabela_dados)
             
             # Agregar resultados
             for tipo, dados in classificacao.items():
@@ -183,6 +233,8 @@ def analisar_valores_extremos(conexao):
     print("ANÁLISE DE VALORES EXTREMOS")
     print("=" * 80)
     
+    nomenclatura = detectar_nomenclatura(conexao)
+    tabela_dados = nome_tabela('tb_dados', nomenclatura)
     cursor = conexao.cursor()
     
     for ano in [1980, 1990, 2000, 2010, 2020, 2030]:
@@ -191,7 +243,7 @@ def analisar_valores_extremos(conexao):
         # Maior valor (como string)
         cursor.execute(f"""
             SELECT `{coluna}`, LENGTH(`{coluna}`)
-            FROM tb_dados
+            FROM `{tabela_dados}`
             WHERE `{coluna}` IS NOT NULL AND `{coluna}` != ''
             ORDER BY LENGTH(`{coluna}`) DESC
             LIMIT 5
@@ -213,6 +265,8 @@ def analisar_caracteres_especiais(conexao):
     print("ANÁLISE DE CARACTERES ESPECIAIS")
     print("=" * 80)
     
+    nomenclatura = detectar_nomenclatura(conexao)
+    tabela_dados = nome_tabela('tb_dados', nomenclatura)
     cursor = conexao.cursor()
     
     # Procurar por diferentes padrões (SIMPLIFICADO - apenas anos chave)
@@ -233,7 +287,7 @@ def analisar_caracteres_especiais(conexao):
             try:
                 cursor.execute(f"""
                     SELECT COUNT(*) 
-                    FROM tb_dados 
+                    FROM `{tabela_dados}`
                     WHERE `{coluna}` LIKE %s
                 """, (padrao,))
                 qtd = cursor.fetchone()[0]
@@ -246,7 +300,7 @@ def analisar_caracteres_especiais(conexao):
                     # Buscar exemplos
                     cursor.execute(f"""
                         SELECT DISTINCT `{coluna}` 
-                        FROM tb_dados 
+                        FROM `{tabela_dados}`
                         WHERE `{coluna}` LIKE %s
                         LIMIT 3
                     """, (padrao,))
@@ -337,14 +391,20 @@ def analisar_amostra_por_variavel(conexao):
     print("ANÁLISE POR VARIÁVEL (AMOSTRA)")
     print("=" * 80)
     
+    nomenclatura = detectar_nomenclatura(conexao)
+    tabela_dados = nome_tabela('tb_dados', nomenclatura)
+    tabela_variavel = nome_tabela('tb_variavel', nomenclatura)
+    col_var_cod = nome_coluna('var_cod', nomenclatura)
+    col_var_nome = nome_coluna('var_nome', nomenclatura)
+    
     cursor = conexao.cursor()
     
     # Pegar 5 variáveis com mais dados
-    cursor.execute("""
-        SELECT var_cod, COUNT(*) as qtd
-        FROM tb_dados
+    cursor.execute(f"""
+        SELECT `{col_var_cod}`, COUNT(*) as qtd
+        FROM `{tabela_dados}`
         WHERE d_2020 IS NOT NULL AND d_2020 != ''
-        GROUP BY var_cod
+        GROUP BY `{col_var_cod}`
         ORDER BY qtd DESC
         LIMIT 5
     """)
@@ -353,7 +413,7 @@ def analisar_amostra_por_variavel(conexao):
     
     for var_cod, qtd in variaveis:
         # Buscar nome da variável
-        cursor.execute(f"SELECT var_nome FROM tb_variavel WHERE var_cod = {var_cod}")
+        cursor.execute(f"SELECT `{col_var_nome}` FROM `{tabela_variavel}` WHERE `{col_var_cod}` = {var_cod}")
         resultado = cursor.fetchone()
         var_nome = resultado[0] if resultado else 'Desconhecida'
         
@@ -363,8 +423,8 @@ def analisar_amostra_por_variavel(conexao):
         # Buscar alguns valores de 2020
         cursor.execute(f"""
             SELECT DISTINCT d_2020
-            FROM tb_dados
-            WHERE var_cod = {var_cod} AND d_2020 IS NOT NULL AND d_2020 != ''
+            FROM `{tabela_dados}`
+            WHERE `{col_var_cod}` = {var_cod} AND d_2020 IS NOT NULL AND d_2020 != ''
             LIMIT 10
         """)
         valores = [r[0] for r in cursor.fetchall()]
@@ -387,10 +447,15 @@ def exportar_problemas_para_arquivo(conexao):
     print("EXPORTANDO REGISTROS PROBLEMÁTICOS")
     print("=" * 80)
     
+    nomenclatura = detectar_nomenclatura(conexao)
+    tabela_dados = nome_tabela('tb_dados', nomenclatura)
+    col_loc = nome_coluna('loc_cod', nomenclatura)
+    col_var = nome_coluna('var_cod', nomenclatura)
     cursor = conexao.cursor()
     
     with open('dados_problematicos.txt', 'w', encoding='utf-8') as f:
         f.write("REGISTROS COM DADOS POTENCIALMENTE PROBLEMÁTICOS\n")
+        f.write(f"Tabela analisada: {tabela_dados}\n")
         f.write("=" * 80 + "\n\n")
         
         # Procurar valores com letras (apenas anos chave)
@@ -399,8 +464,8 @@ def exportar_problemas_para_arquivo(conexao):
             
             try:
                 cursor.execute(f"""
-                    SELECT loc_cod, var_cod, `{coluna}`
-                    FROM tb_dados
+                    SELECT `{col_loc}`, `{col_var}`, `{coluna}`
+                    FROM `{tabela_dados}`
                     WHERE `{coluna}` LIKE '%x%' OR `{coluna}` LIKE '%[%'
                     LIMIT 20
                 """)
@@ -410,8 +475,8 @@ def exportar_problemas_para_arquivo(conexao):
                 if resultados:
                     f.write(f"\nColuna {coluna} - Valores com caracteres especiais:\n")
                     f.write("-" * 50 + "\n")
-                    for loc_cod, var_cod, valor in resultados:
-                        f.write(f"  loc_cod={loc_cod}, var_cod={var_cod}, valor='{valor}'\n")
+                    for loc_id, var_id, valor in resultados:
+                        f.write(f"  {col_loc}={loc_id}, {col_var}={var_id}, valor='{valor}'\n")
             except Exception as e:
                 f.write(f"Erro ao analisar {coluna}: {e}\n")
     

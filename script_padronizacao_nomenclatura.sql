@@ -1,9 +1,12 @@
 -- =====================================================
 -- SCRIPT DE PADRONIZAÇÃO DE NOMENCLATURA
 -- =====================================================
--- Data: 24/02/2026
+-- Data: 25/02/2026
+-- Versão: 2.0
 -- Banco de dados: imp
--- Objetivo: Renomear tabelas e colunas conforme padrão definido
+-- Objetivo: Renomear tabelas e colunas conforme padrão definido,
+--           criar estrutura de regiões de trabalho por órgão
+--           (Snowflake parcial + SCD Tipo 2)
 -- =====================================================
 -- 
 -- IMPORTANTE: Este script deve ser executado ANTES do script
@@ -228,20 +231,23 @@ RENAME TABLE tb_erro_mvto TO log_erro_movimento;
 CREATE TABLE IF NOT EXISTS dim_tempo (
     tempo_id INT NOT NULL AUTO_INCREMENT COMMENT 'Surrogate Key',
     ano YEAR NOT NULL COMMENT 'Ano (1980-2030)',
-    mes TINYINT NULL COMMENT 'Mês (1-12)',
-    trimestre TINYINT NULL COMMENT 'Trimestre (1-4)',
-    semestre TINYINT NULL COMMENT 'Semestre (1-2)',
+    mes TINYINT NULL COMMENT 'Mês (1-12), NULL = registro anual',
+    trimestre TINYINT NULL COMMENT 'Trimestre (1-4), NULL = registro anual',
+    semestre TINYINT NULL COMMENT 'Semestre (1-2), NULL = registro anual',
     decada VARCHAR(10) NOT NULL COMMENT 'Década',
     seculo TINYINT NOT NULL COMMENT 'Século',
     ano_bissexto_ind BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'É ano bissexto?',
-    descricao VARCHAR(50) NOT NULL COMMENT 'Descrição',
+    descricao VARCHAR(50) NOT NULL COMMENT 'Descrição do período',
     PRIMARY KEY (tempo_id),
-    UNIQUE KEY uk_ano (ano),
-    INDEX idx_decada (decada)
-) ENGINE=InnoDB COMMENT='Dimensão Tempo';
+    UNIQUE KEY uk_ano_mes (ano, mes),
+    INDEX idx_decada (decada),
+    INDEX idx_ano (ano),
+    INDEX idx_mes (mes)
+) ENGINE=InnoDB COMMENT='Dimensão Tempo — granularidade anual e mensal';
 
 -- Popular dim_tempo se estiver vazia
-INSERT IGNORE INTO dim_tempo (ano, decada, seculo, ano_bissexto_ind, descricao)
+-- Etapa 1: Registros anuais (mes = NULL) — compatibilidade com dados existentes
+INSERT IGNORE INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
 WITH RECURSIVE anos AS (
     SELECT 1980 as ano
     UNION ALL
@@ -249,11 +255,45 @@ WITH RECURSIVE anos AS (
 )
 SELECT 
     ano,
+    NULL as mes,
+    NULL as trimestre,
+    NULL as semestre,
     CONCAT(FLOOR(ano/10)*10, 's') as decada,
     CASE WHEN ano < 2000 THEN 20 ELSE 21 END as seculo,
     (ano % 4 = 0 AND (ano % 100 != 0 OR ano % 400 = 0)) as ano_bissexto_ind,
     CONCAT('Ano ', ano) as descricao
 FROM anos;
+
+-- Etapa 2: Registros mensais (12 por ano) — granularidade expandida
+INSERT IGNORE INTO dim_tempo (ano, mes, trimestre, semestre, decada, seculo, ano_bissexto_ind, descricao)
+WITH RECURSIVE anos AS (
+    SELECT 1980 as ano
+    UNION ALL
+    SELECT ano + 1 FROM anos WHERE ano < 2030
+),
+meses AS (
+    SELECT 1 as mes UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+    UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+    UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
+)
+SELECT 
+    a.ano,
+    m.mes,
+    CEIL(m.mes / 3) as trimestre,
+    CEIL(m.mes / 6) as semestre,
+    CONCAT(FLOOR(a.ano/10)*10, 's') as decada,
+    CASE WHEN a.ano < 2000 THEN 20 ELSE 21 END as seculo,
+    (a.ano % 4 = 0 AND (a.ano % 100 != 0 OR a.ano % 400 = 0)) as ano_bissexto_ind,
+    CONCAT(
+        CASE m.mes
+            WHEN 1 THEN 'Jan' WHEN 2 THEN 'Fev' WHEN 3 THEN 'Mar'
+            WHEN 4 THEN 'Abr' WHEN 5 THEN 'Mai' WHEN 6 THEN 'Jun'
+            WHEN 7 THEN 'Jul' WHEN 8 THEN 'Ago' WHEN 9 THEN 'Set'
+            WHEN 10 THEN 'Out' WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dez'
+        END, '/', a.ano
+    ) as descricao
+FROM anos a
+CROSS JOIN meses m;
 
 
 -- =====================================================
@@ -293,8 +333,9 @@ CREATE TABLE IF NOT EXISTS cfg_metadados (
 ) ENGINE=InnoDB COMMENT='Metadados do Data Warehouse';
 
 INSERT IGNORE INTO cfg_metadados (chave, valor, descricao) VALUES
-('schema_versao', '2.0', 'Versão do schema'),
-('nomenclatura_versao', '1.0', 'Versão do padrão de nomenclatura'),
+('schema_versao', '3.0', 'Versão do schema (inclui modelo de regiões por órgão)'),
+('nomenclatura_versao', '2.0', 'Versão do padrão de nomenclatura (inclui bridge_)'),
+('modelo_regioes_versao', '1.0', 'Versão do modelo Snowflake de regiões de trabalho'),
 ('ultima_carga_dh', NULL, 'Data da última carga ETL'),
 ('banco_nome', 'imp', 'Nome do banco de dados');
 
@@ -320,6 +361,214 @@ CREATE TABLE IF NOT EXISTS log_auditoria (
 
 
 -- =====================================================
+-- PARTE 7: CRIAR ESTRUTURA DE REGIÕES POR ÓRGÃO
+-- (Modelo Snowflake parcial + SCD Tipo 2)
+-- =====================================================
+
+-- dim_orgao — Órgãos que definem regionalizações
+CREATE TABLE IF NOT EXISTS dim_orgao (
+    orgao_id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    orgao_nome VARCHAR(200) NOT NULL
+        COMMENT 'Nome completo do órgão',
+    orgao_sigla VARCHAR(20) NULL
+        COMMENT 'Sigla do órgão',
+    orgao_nivel ENUM('estadual', 'secretaria', 'autarquia', 'federal', 'municipal') NOT NULL DEFAULT 'secretaria'
+        COMMENT 'Nível institucional',
+    ativo_ind BOOLEAN NOT NULL DEFAULT TRUE
+        COMMENT 'Indica se o órgão está ativo',
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        COMMENT 'Data/hora da carga',
+    atualizacao_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        COMMENT 'Última atualização',
+    PRIMARY KEY (orgao_id),
+    UNIQUE KEY uk_orgao_nome (orgao_nome),
+    INDEX idx_orgao_sigla (orgao_sigla)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Dimensão Órgão - Órgãos que definem regionalizações de trabalho';
+
+-- dim_regiao — Regiões de trabalho (todas as regionalizações)
+CREATE TABLE IF NOT EXISTS dim_regiao (
+    regiao_id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    orgao_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Órgão dono desta regionalização',
+    regiao_pai_id SMALLINT UNSIGNED NULL
+        COMMENT 'FK - Região pai (auto-referência para hierarquia multi-nível)',
+    regiao_nome VARCHAR(200) NOT NULL
+        COMMENT 'Nome da região',
+    regiao_sigla VARCHAR(20) NULL
+        COMMENT 'Sigla da região',
+    regiao_nivel TINYINT UNSIGNED NOT NULL DEFAULT 1
+        COMMENT 'Nível hierárquico (1=macro, 2=micro, 3=local, etc.)',
+    regiao_tipo VARCHAR(50) NULL
+        COMMENT 'Tipo descritivo (Região de Planejamento, Macrorregião, RISP, etc.)',
+    regiao_cod_externo VARCHAR(20) NULL
+        COMMENT 'Código em sistema externo (IBGE, SUS, etc.)',
+    ativa_ind BOOLEAN NOT NULL DEFAULT TRUE
+        COMMENT 'Indica se a região está ativa',
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        COMMENT 'Data/hora da carga',
+    atualizacao_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        COMMENT 'Última atualização',
+    PRIMARY KEY (regiao_id),
+    INDEX idx_regiao_orgao (orgao_id),
+    INDEX idx_regiao_pai (regiao_pai_id),
+    INDEX idx_regiao_nivel (regiao_nivel),
+    INDEX idx_regiao_tipo (regiao_tipo),
+    CONSTRAINT fk_regiao_orgao
+        FOREIGN KEY (orgao_id) REFERENCES dim_orgao (orgao_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_regiao_pai
+        FOREIGN KEY (regiao_pai_id) REFERENCES dim_regiao (regiao_id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Dimensão Região - Regiões de trabalho de todos os órgãos, com hierarquia multi-nível';
+
+-- bridge_localidade_regiao — Vínculo com temporalidade (SCD Tipo 2)
+CREATE TABLE IF NOT EXISTS bridge_localidade_regiao (
+    vinculo_id INT UNSIGNED NOT NULL AUTO_INCREMENT
+        COMMENT 'PK - Surrogate key',
+    localidade_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Localidade (município, distrito, etc.)',
+    regiao_id SMALLINT UNSIGNED NOT NULL
+        COMMENT 'FK - Região de trabalho',
+    vigencia_inicio_dt DATE NOT NULL
+        COMMENT 'Data de início da vigência deste vínculo',
+    vigencia_fim_dt DATE NULL
+        COMMENT 'Data de fim da vigência (NULL = vigente/atual)',
+    vigente_ind BOOLEAN GENERATED ALWAYS AS (vigencia_fim_dt IS NULL) STORED
+        COMMENT 'Flag de conveniência: TRUE se vigente, FALSE se encerrado',
+    motivo_alteracao_txt VARCHAR(500) NULL
+        COMMENT 'Motivo da mudança de região',
+    norma_legal_txt VARCHAR(200) NULL
+        COMMENT 'Decreto, Lei ou Portaria que definiu a mudança',
+    carga_dh TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        COMMENT 'Data/hora da carga do registro',
+    PRIMARY KEY (vinculo_id),
+    INDEX idx_bridge_localidade (localidade_id),
+    INDEX idx_bridge_regiao (regiao_id),
+    INDEX idx_bridge_vigente (vigente_ind),
+    INDEX idx_bridge_vigencia (vigencia_inicio_dt, vigencia_fim_dt),
+    UNIQUE KEY uk_bridge_vigencia (localidade_id, regiao_id, vigencia_inicio_dt),
+    CONSTRAINT fk_bridge_localidade
+        FOREIGN KEY (localidade_id) REFERENCES dim_localidade (localidade_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_bridge_regiao
+        FOREIGN KEY (regiao_id) REFERENCES dim_regiao (regiao_id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='Bridge Table - Vínculo localidade<->região com temporalidade (SCD Tipo 2)';
+
+
+-- =====================================================
+-- PARTE 7.1: PROCEDURE PARA MOVER MUNICÍPIO DE REGIÃO
+-- =====================================================
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS sp_mover_localidade_regiao$$
+
+CREATE PROCEDURE sp_mover_localidade_regiao(
+    IN p_localidade_id SMALLINT UNSIGNED,
+    IN p_nova_regiao_id SMALLINT UNSIGNED,
+    IN p_data_mudanca DATE,
+    IN p_motivo VARCHAR(500),
+    IN p_norma_legal VARCHAR(200)
+)
+BEGIN
+    DECLARE v_orgao_id SMALLINT UNSIGNED;
+    DECLARE v_nivel TINYINT UNSIGNED;
+    DECLARE v_vinculo_anterior INT UNSIGNED;
+    
+    -- Obter órgão e nível da nova região
+    SELECT orgao_id, regiao_nivel 
+    INTO v_orgao_id, v_nivel
+    FROM dim_regiao 
+    WHERE regiao_id = p_nova_regiao_id;
+    
+    -- Encontrar vínculo vigente anterior (mesmo órgão e nível)
+    SELECT b.vinculo_id
+    INTO v_vinculo_anterior
+    FROM bridge_localidade_regiao b
+    JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+    WHERE b.localidade_id = p_localidade_id
+      AND r.orgao_id = v_orgao_id
+      AND r.regiao_nivel = v_nivel
+      AND b.vigente_ind = TRUE
+    LIMIT 1;
+    
+    -- Encerrar vínculo anterior (se existir)
+    IF v_vinculo_anterior IS NOT NULL THEN
+        UPDATE bridge_localidade_regiao
+        SET vigencia_fim_dt = DATE_SUB(p_data_mudanca, INTERVAL 1 DAY)
+        WHERE vinculo_id = v_vinculo_anterior;
+    END IF;
+    
+    -- Criar novo vínculo
+    INSERT INTO bridge_localidade_regiao 
+        (localidade_id, regiao_id, vigencia_inicio_dt, motivo_alteracao_txt, norma_legal_txt)
+    VALUES 
+        (p_localidade_id, p_nova_regiao_id, p_data_mudanca, p_motivo, p_norma_legal);
+    
+    SELECT 
+        CONCAT('Localidade ', p_localidade_id, 
+               ' movida para região ', p_nova_regiao_id,
+               ' a partir de ', p_data_mudanca) AS resultado;
+               
+END$$
+
+DELIMITER ;
+
+
+-- =====================================================
+-- PARTE 7.2: VIEWS DE CONVENIÊNCIA
+-- =====================================================
+
+-- View: Localidades com suas regiões vigentes
+CREATE OR REPLACE VIEW vw_localidade_regioes_vigentes AS
+SELECT 
+    l.localidade_id,
+    l.localidade_nome,
+    l.localidade_cod_ibge,
+    o.orgao_id,
+    o.orgao_nome,
+    o.orgao_sigla,
+    r.regiao_id,
+    r.regiao_nome,
+    r.regiao_nivel,
+    r.regiao_tipo,
+    b.vigencia_inicio_dt
+FROM dim_localidade l
+JOIN bridge_localidade_regiao b ON l.localidade_id = b.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id
+WHERE b.vigente_ind = TRUE;
+
+-- View: Localidades com regiões históricas (para consulta por data)
+CREATE OR REPLACE VIEW vw_localidade_regioes_historico AS
+SELECT 
+    l.localidade_id,
+    l.localidade_nome,
+    l.localidade_cod_ibge,
+    o.orgao_id,
+    o.orgao_nome,
+    o.orgao_sigla,
+    r.regiao_id,
+    r.regiao_nome,
+    r.regiao_nivel,
+    r.regiao_tipo,
+    b.vigencia_inicio_dt,
+    b.vigencia_fim_dt,
+    b.vigente_ind,
+    b.motivo_alteracao_txt
+FROM dim_localidade l
+JOIN bridge_localidade_regiao b ON l.localidade_id = b.localidade_id
+JOIN dim_regiao r ON b.regiao_id = r.regiao_id
+JOIN dim_orgao o ON r.orgao_id = o.orgao_id;
+
+
+-- =====================================================
 -- REABILITAR VERIFICAÇÕES
 -- =====================================================
 
@@ -336,9 +585,11 @@ SELECT
         WHEN TABLE_NAME LIKE 'dim_%' THEN 'Dimensão'
         WHEN TABLE_NAME LIKE 'fact_%' THEN 'Fato'
         WHEN TABLE_NAME LIKE 'rel_%' THEN 'Relacionamento'
+        WHEN TABLE_NAME LIKE 'bridge_%' THEN 'Bridge (SCD)'
         WHEN TABLE_NAME LIKE 'aux_%' THEN 'Auxiliar'
         WHEN TABLE_NAME LIKE 'cfg_%' THEN 'Configuração'
         WHEN TABLE_NAME LIKE 'log_%' THEN 'Log'
+        WHEN TABLE_NAME LIKE 'vw_%' THEN 'View'
         ELSE 'Outro'
     END as TIPO,
     TABLE_ROWS as REGISTROS
@@ -349,10 +600,12 @@ ORDER BY
         WHEN TABLE_NAME LIKE 'dim_%' THEN 1
         WHEN TABLE_NAME LIKE 'fact_%' THEN 2
         WHEN TABLE_NAME LIKE 'rel_%' THEN 3
-        WHEN TABLE_NAME LIKE 'aux_%' THEN 4
-        WHEN TABLE_NAME LIKE 'cfg_%' THEN 5
-        WHEN TABLE_NAME LIKE 'log_%' THEN 6
-        ELSE 7
+        WHEN TABLE_NAME LIKE 'bridge_%' THEN 4
+        WHEN TABLE_NAME LIKE 'aux_%' THEN 5
+        WHEN TABLE_NAME LIKE 'cfg_%' THEN 6
+        WHEN TABLE_NAME LIKE 'log_%' THEN 7
+        WHEN TABLE_NAME LIKE 'vw_%' THEN 8
+        ELSE 9
     END,
     TABLE_NAME;
 

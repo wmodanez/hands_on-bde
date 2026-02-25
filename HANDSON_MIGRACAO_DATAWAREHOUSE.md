@@ -202,12 +202,11 @@ python conexao_mysql.py
 
 ```prompt
 ✅ Conectado ao MySQL 8.4.x | Banco: colabX
-📦 Tabelas encontradas: 23
-   • tb_aspecto
-   • tb_base_cart
-   • ...
+📦 Tabelas encontradas: 0
 ✅ Conexão encerrada
 ```
+
+> ⚠️ **IMPORTANTE:** O banco do colaborador está vazio no início. Você verá **0 tabelas** até executar os exercícios de migração. Se quiser comparar a estrutura original, consulte o banco `imp` (banco de referência com 23 tabelas).
 
 ### ✅ Checkpoint — Ambiente Pronto
 
@@ -215,7 +214,7 @@ Antes de prosseguir, confirme:
 
 - [ ] DBeaver conecta ao banco sem erros
 - [ ] Python com `mysql-connector-python` instalado
-- [ ] Script `conexao_mysql.py` retorna as 23 tabelas
+- [ ] Script `conexao_mysql.py` retorna as tabelas (0 no banco do colaborador, 23 no banco `imp`)
 - [ ] Você consegue visualizar os dados via phpMyAdmin ou DBeaver
 
 ---
@@ -223,6 +222,8 @@ Antes de prosseguir, confirme:
 ## 3. Exercício 1 — Diagnóstico do Banco Original
 
 **Objetivo:** Entender o estado atual do banco e identificar problemas
+
+> 📌 **ATENÇÃO:** Para este exercício, conecte ao banco `imp` (banco de referência), não ao seu banco individual. Seu banco ainda está vazio nesta etapa. As queries abaixo ajudarão você a entender a estrutura que será refatorada.
 
 ### 3.1 — Mapear a Estrutura
 

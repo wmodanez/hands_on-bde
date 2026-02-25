@@ -12,8 +12,8 @@
 1. [Sobre este Hands-On](#1-sobre-este-hands-on)
 2. [Configuração do Ambiente](#2-configuração-do-ambiente)
 3. [Exercício 1 — Diagnóstico do Banco Original](#3-exercício-1--diagnóstico-do-banco-original)
-4. [Exercício 2 — Limpeza de Dados](#4-exercício-2--limpeza-de-dados)
-5. [Exercício 3 — Padronização de Nomenclatura](#5-exercício-3--padronização-de-nomenclatura)
+4. [Exercício 2 — Análise e Planejamento da Limpeza](#4-exercício-2--análise-e-planejamento-da-limpeza-de-dados)
+5. [Exercício 3 — Planejamento da Padronização](#5-exercício-3--planejamento-da-padronização-de-nomenclatura)
 6. [Exercício 4 — Análise dos Dados da Tabela Fato](#6-exercício-4--análise-dos-dados-da-tabela-fato)
 7. [Exercício 5 — Migração e Normalização](#7-exercício-5--migração-e-normalização)
 8. [Exercício 6 — Chaves Primárias e Estrangeiras](#8-exercício-6--chaves-primárias-e-estrangeiras)
@@ -58,18 +58,20 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 
 ### Tempo Estimado
 
-| Exercício | Duração | Nível |
-| ----------- | -------- | --------- |
-| Configuração do Ambiente | 30 min | 🟢 Básico |
-| Exercício 1 — Diagnóstico | 45 min | 🟢 Básico |
-| Exercício 2 — Limpeza de Dados | 1h 30min | 🟡 Intermediário |
-| Exercício 3 — Nomenclatura | 1h | 🟡 Intermediário |
-| Exercício 4 — Análise de Dados | 1h | 🟡 Intermediário |
-| Exercício 5 — Migração | 1h 30min | 🔴 Avançado |
-| Exercício 6 — PKs e FKs | 1h | 🟡 Intermediário |
-| Exercício 7 — Validação Final | 45 min | 🟢 Básico |
-| Exercício 8 — Regiões por Órgão | 1h 30min | 🔴 Avançado |
-| **Total** | **~9h 30min** | |
+| Exercício | Duração | Nível | Banco |
+| ----------- | -------- | --------- | ------- |
+| Configuração do Ambiente | 30 min | 🟢 Básico | — |
+| Exercício 1 — Diagnóstico | 45 min | 🟢 Básico | `imp` 🔍 |
+| Exercício 2 — Análise/Planejamento Limpeza | 45 min | 🟡 Intermediário | `imp` 🔍 |
+| Exercício 3 — Planejamento Nomenclatura | 30 min | 🟡 Intermediário | `imp` 🔍 |
+| Exercício 4 — Análise de Dados | 1h | 🟡 Intermediário | `imp` 🔍 |
+| Exercício 5 — Cópia, Limpeza, Padronização e Migração | 2h 30min | 🔴 Avançado | `colabX` ✏️ |
+| Exercício 6 — PKs e FKs | 1h | 🟡 Intermediário | `colabX` ✏️ |
+| Exercício 7 — Validação Final | 45 min | 🟢 Básico | `colabX` ✏️ |
+| Exercício 8 — Regiões por Órgão | 1h 30min | 🔴 Avançado | `colabX` ✏️ |
+| **Total** | **~9h 15min** | | |
+
+> 🔍 = Somente leitura (SELECT) no banco `imp` | ✏️ = Escrita no banco do colaborador
 
 ---
 
@@ -307,17 +309,21 @@ python analisar_bancos_comparativo.py
 
 **Objetivo:** Entender o estado atual do banco e identificar problemas
 
-> 📌 **ATENÇÃO:** Para este exercício, conecte ao banco `imp` (banco de referência), não ao seu banco individual. Seu banco ainda está vazio nesta etapa. As queries abaixo ajudarão você a entender a estrutura que será refatorada.
+> 📌 **ATENÇÃO:** Neste exercício todas as consultas são de **somente leitura** (SELECT) e devem ser executadas sobre o banco `imp` (banco de referência). Seu banco individual está vazio nesta etapa — os dados serão copiados para ele no Exercício 5.
+>
+> No DBeaver, conecte ao banco `imp` (veja seção 2.5) ou use `TABLE_SCHEMA = 'imp'` nas queries de `information_schema`.
+>
+> No Python, use `conectar(database='imp')`.
 
 ### 3.1 — Mapear a Estrutura
 
-Execute as queries abaixo no DBeaver ou via Python. **Anote os resultados.**
+Execute as queries abaixo no DBeaver (conectado ao `imp`) ou via Python. **Anote os resultados.**
 
 ```sql
 -- 1. Quantas tabelas existem?
 SELECT COUNT(*) AS total_tabelas
 FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE();
+WHERE TABLE_SCHEMA = 'imp';
 
 -- 2. Quantos registros em cada tabela?
 SELECT 
@@ -325,19 +331,19 @@ SELECT
     TABLE_ROWS AS registros,
     ROUND(DATA_LENGTH / 1024 / 1024, 2) AS tamanho_mb
 FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE()
+WHERE TABLE_SCHEMA = 'imp'
 ORDER BY TABLE_ROWS DESC;
 
 -- 3. Quantas PKs existem?
 SELECT COUNT(*) AS total_pks
 FROM information_schema.TABLE_CONSTRAINTS
-WHERE TABLE_SCHEMA = DATABASE()
+WHERE TABLE_SCHEMA = 'imp'
   AND CONSTRAINT_TYPE = 'PRIMARY KEY';
 
 -- 4. Quantas FKs existem?
 SELECT COUNT(*) AS total_fks
 FROM information_schema.TABLE_CONSTRAINTS
-WHERE TABLE_SCHEMA = DATABASE()
+WHERE TABLE_SCHEMA = 'imp'
   AND CONSTRAINT_TYPE = 'FOREIGN KEY';
 ```
 
@@ -351,7 +357,7 @@ SELECT
     DATA_TYPE AS tipo,
     CHARACTER_MAXIMUM_LENGTH AS tamanho
 FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
+WHERE TABLE_SCHEMA = 'imp'
 ORDER BY TABLE_NAME, ORDINAL_POSITION;
 ```
 
@@ -364,15 +370,15 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION;
 ### 3.3 — Identificar Duplicatas
 
 ```sql
--- 6. Duplicatas em tb_base_cart
+-- 6. Duplicatas em tb_base_cart (consultando banco imp)
 SELECT cod_base, COUNT(*) AS qtd
-FROM tb_base_cart
+FROM imp.tb_base_cart
 GROUP BY cod_base
 HAVING COUNT(*) > 1;
 
--- 7. Duplicatas em tb_loc_pai
+-- 7. Duplicatas em tb_loc_pai (consultando banco imp)
 SELECT loc_cod, COUNT(*) AS qtd
-FROM tb_loc_pai
+FROM imp.tb_loc_pai
 GROUP BY loc_cod
 HAVING COUNT(*) > 1;
 ```
@@ -380,22 +386,22 @@ HAVING COUNT(*) > 1;
 ### 3.4 — Identificar Registros Órfãos
 
 ```sql
--- 8. Localidades em tb_dados que não existem em tb_localidade
+-- 8. Localidades em tb_dados que não existem em tb_localidade (consultando banco imp)
 SELECT DISTINCT d.loc_cod
-FROM tb_dados d
-LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+FROM imp.tb_dados d
+LEFT JOIN imp.tb_localidade l ON d.loc_cod = l.loc_cod
 WHERE l.loc_cod IS NULL;
 
--- 9. Variáveis em tb_dados que não existem em tb_variavel
+-- 9. Variáveis em tb_dados que não existem em tb_variavel (consultando banco imp)
 SELECT DISTINCT d.var_cod
-FROM tb_dados d
-LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
+FROM imp.tb_dados d
+LEFT JOIN imp.tb_variavel v ON d.var_cod = v.var_cod
 WHERE v.var_cod IS NULL;
 
--- 10. Variáveis em tb_rel_var_fnt que não existem em tb_variavel
+-- 10. Variáveis em tb_rel_var_fnt que não existem em tb_variavel (consultando banco imp)
 SELECT DISTINCT r.var_cod
-FROM tb_rel_var_fnt r
-LEFT JOIN tb_variavel v ON r.var_cod = v.var_cod
+FROM imp.tb_rel_var_fnt r
+LEFT JOIN imp.tb_variavel v ON r.var_cod = v.var_cod
 WHERE v.var_cod IS NULL;
 ```
 
@@ -416,19 +422,23 @@ Preencha a tabela abaixo com seus achados:
 
 ---
 
-## 4. Exercício 2 — Limpeza de Dados
+## 4. Exercício 2 — Análise e Planejamento da Limpeza de Dados
 
-**Objetivo:** Resolver duplicatas e registros órfãos para possibilitar PKs e FKs
+**Objetivo:** Identificar duplicatas e registros órfãos no banco `imp` e planejar a estratégia de limpeza
+
+> 📌 **ATENÇÃO:** Neste exercício, todas as queries são de **somente leitura** (SELECT) sobre o banco `imp`. Você **não** pode executar CREATE, DELETE ou INSERT no `imp`, pois seu acesso é de leitura.
+>
+> A **execução** da limpeza será feita no **Exercício 5**, após copiar os dados para o seu banco individual.
 
 ### 4.1 — Analisar Duplicatas em tb_base_cart
 
 ```sql
--- Ver os registros duplicados em detalhe
+-- Ver os registros duplicados em detalhe (consultando banco imp)
 SELECT *
-FROM tb_base_cart
+FROM imp.tb_base_cart
 WHERE cod_base IN (
     SELECT cod_base
-    FROM tb_base_cart
+    FROM imp.tb_base_cart
     GROUP BY cod_base
     HAVING COUNT(*) > 1
 )
@@ -437,13 +447,14 @@ ORDER BY cod_base;
 
 📝 **Pergunta:** Os registros duplicados são idênticos ou possuem dados diferentes?
 
-### 4.2 — Resolver Duplicatas em tb_base_cart
+### 4.2 — Planejar Resolução de Duplicatas em tb_base_cart
 
-Escolha **uma** das estratégias abaixo:
+Analise os dados e escolha qual estratégia você irá aplicar **após copiar os dados para seu banco** (Exercício 5):
 
 **Estratégia A — Remover duplicatas idênticas (manter 1):**
 
 ```sql
+-- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
 -- Criar tabela temporária com registros únicos
 CREATE TABLE tb_base_cart_temp AS
 SELECT DISTINCT *
@@ -457,6 +468,7 @@ RENAME TABLE tb_base_cart_temp TO tb_base_cart;
 **Estratégia B — Manter o registro com maior ano:**
 
 ```sql
+-- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
 -- Criar tabela com o maior ano por cod_base
 CREATE TABLE tb_base_cart_temp AS
 SELECT b.*
@@ -471,36 +483,33 @@ DROP TABLE tb_base_cart;
 RENAME TABLE tb_base_cart_temp TO tb_base_cart;
 ```
 
-### 4.3 — Resolver Duplicatas em tb_loc_pai
+📝 **Anote sua escolha:** Estratégia A ou B? Justifique.
+
+### 4.3 — Analisar Duplicatas em tb_loc_pai
 
 ```sql
--- Analisar duplicatas em detalhe
+-- Analisar duplicatas em detalhe (consultando banco imp)
 SELECT *
-FROM tb_loc_pai
+FROM imp.tb_loc_pai
 WHERE loc_cod IN (
     SELECT loc_cod
-    FROM tb_loc_pai
+    FROM imp.tb_loc_pai
     GROUP BY loc_cod
     HAVING COUNT(*) > 1
 )
 ORDER BY loc_cod;
-
--- Resolver (adaptar conforme análise)
-CREATE TABLE tb_loc_pai_temp AS
-SELECT DISTINCT *
-FROM tb_loc_pai;
-
-DROP TABLE tb_loc_pai;
-RENAME TABLE tb_loc_pai_temp TO tb_loc_pai;
 ```
 
-### 4.4 — Resolver Registros Órfãos
+📝 **Pergunta:** As duplicatas em `tb_loc_pai` são idênticas?
 
-Escolha **uma** das estratégias para cada caso:
+### 4.4 — Analisar Registros Órfãos
+
+Identifique os problemas de integridade e escolha a estratégia de resolução:
 
 **Opção 1 — Criar registro genérico (recomendado):**
 
 ```sql
+-- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
 -- Criar localidade "Desconhecida" para referência
 INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
 SELECT DISTINCT d.loc_cod, CONCAT('Localidade Desconhecida (', d.loc_cod, ')'), 0
@@ -519,53 +528,56 @@ WHERE v.var_cod IS NULL;
 **Opção 2 — Remover registros órfãos:**
 
 ```sql
--- ⚠️ CUIDADO: Perda de dados!
+-- ⚠️ NÃO EXECUTE AGORA — CUIDADO: Perda de dados!
 DELETE d FROM tb_dados d
 LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
 WHERE l.loc_cod IS NULL;
 ```
 
-### 4.5 — Validar Limpeza
+📝 **Anote sua escolha:** Opção 1 ou 2? Justifique.
+
+### 4.5 — Verificação de Referência (somente leitura)
+
+Execute esta query no `imp` para confirmar os números dos problemas encontrados:
 
 ```sql
--- Reexecutar as queries do Exercício 1 (itens 6 a 10)
--- TODAS devem retornar 0 registros
-
--- Verificação rápida
+-- Verificação de problemas no banco imp (somente leitura)
 SELECT 'tb_base_cart duplicatas' AS verificacao,
        COUNT(*) - COUNT(DISTINCT cod_base) AS problemas
-FROM tb_base_cart
+FROM imp.tb_base_cart
 UNION ALL
 SELECT 'tb_loc_pai duplicatas',
        COUNT(*) - COUNT(DISTINCT loc_cod)
-FROM tb_loc_pai
+FROM imp.tb_loc_pai
 UNION ALL
 SELECT 'tb_dados loc_cod órfãos',
        COUNT(DISTINCT d.loc_cod)
-FROM tb_dados d LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+FROM imp.tb_dados d LEFT JOIN imp.tb_localidade l ON d.loc_cod = l.loc_cod
 WHERE l.loc_cod IS NULL
 UNION ALL
 SELECT 'tb_dados var_cod órfãos',
        COUNT(DISTINCT d.var_cod)
-FROM tb_dados d LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
+FROM imp.tb_dados d LEFT JOIN imp.tb_variavel v ON d.var_cod = v.var_cod
 WHERE v.var_cod IS NULL;
 ```
 
-**Resultado esperado:** Todos os valores na coluna `problemas` devem ser `0`.
+📝 **Anote os números** — eles serão usados como referência para validar a limpeza no Exercício 5.
 
-### ✅ Checkpoint — Dados Limpos
+### ✅ Checkpoint — Análise de Limpeza Concluída
 
-- [ ] Zero duplicatas em tb_base_cart
-- [ ] Zero duplicatas em tb_loc_pai
-- [ ] Zero registros órfãos em tb_dados (loc_cod e var_cod)
-- [ ] Zero registros órfãos em tb_rel_var_fnt
+- [ ] Duplicatas em tb_base_cart identificadas e estratégia escolhida
+- [ ] Duplicatas em tb_loc_pai identificadas e estratégia escolhida
+- [ ] Registros órfãos quantificados e estratégia escolhida
+- [ ] Números de referência anotados para validação futura
 
 ---
 
-## 5. Exercício 3 — Padronização de Nomenclatura
+## 5. Exercício 3 — Planejamento da Padronização de Nomenclatura
 
-**Objetivo:** Renomear tabelas e colunas seguindo o padrão definido
+**Objetivo:** Entender o padrão de nomenclatura e preparar os scripts de renomeação
 
+> 📌 **ATENÇÃO:** Neste exercício você irá **estudar** o padrão e **preparar** os scripts. A **execução** dos ALTER/RENAME será feita no **Exercício 5**, após copiar os dados para o seu banco individual.
+>
 > 📖 Consulte o documento `padrao_nomenclatura.md` para a referência completa do de-para.
 
 ### 5.1 — Entender o Padrão
@@ -588,11 +600,11 @@ WHERE v.var_cod IS NULL;
 | `_dh` | Data/hora | `busca_dh` |
 | `_ind` | Indicador (boolean) | `mapa_disponivel_ind` |
 
-### 5.2 — Renomear Colunas (executar por tabela)
+### 5.2 — Scripts de Renomeação de Colunas (preparar para execução futura)
 
-> ⚠️ Execute uma tabela por vez e valide antes de prosseguir.
+> ⚠️ **NÃO EXECUTE AGORA** — estes scripts serão executados no **Exercício 5**, no seu banco individual, após a cópia dos dados. Por enquanto, estude e entenda o de-para.
 
-**Começar pelas dimensões simples:**
+**Dimensões simples:**
 
 ```sql
 -- dim_aspecto
@@ -696,9 +708,9 @@ ALTER TABLE tb_erro_mvto
     CHANGE COLUMN msg_erro erro_msg TEXT;
 ```
 
-### 5.3 — Renomear Tabelas
+### 5.3 — Script de Renomeação de Tabelas (preparar para execução futura)
 
-> ⚠️ Execute **somente após** todas as colunas terem sido renomeadas com sucesso.
+> ⚠️ **NÃO EXECUTE AGORA** — Este script será executado no **Exercício 5**, no seu banco individual, **somente após** todas as colunas terem sido renomeadas com sucesso.
 
 ```sql
 RENAME TABLE
@@ -727,10 +739,13 @@ RENAME TABLE
     tb_erro_mvto TO log_erro_movimento;
 ```
 
-### 5.4 — Validar Nomenclatura
+### 5.4 — Queries de Validação (para usar após execução no Exercício 5)
+
+Guarde estas queries para validar **após executar** a renomeação no seu banco:
 
 ```sql
 -- Verificar que não resta nenhuma tabela com prefixo tb_
+-- ⚠️ Usar após executar no seu banco (Exercício 5)
 SELECT TABLE_NAME
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE()
@@ -754,12 +769,14 @@ WHERE TABLE_SCHEMA = DATABASE()
 ORDER BY tipo, TABLE_NAME;
 ```
 
-### ✅ Checkpoint — Nomenclatura Padronizada
+> 💡 **Referência:** No banco `imp` original, todas as 23 tabelas possuem prefixo `tb_`. Após a padronização no seu banco, nenhuma deve manter esse prefixo.
 
-- [ ] Zero tabelas com prefixo `tb_`
-- [ ] Todas as colunas em `snake_case`
-- [ ] Prefixos corretos por tipo de tabela
-- [ ] Query de validação retorna 0 tabelas sem prefixo
+### ✅ Checkpoint — Planejamento da Nomenclatura Concluído
+
+- [ ] Padrão de nomenclatura estudado e compreendido
+- [ ] Scripts de renomeação de colunas preparados
+- [ ] Script de renomeação de tabelas preparado
+- [ ] Queries de validação guardadas para execução futura
 
 ---
 
@@ -767,12 +784,15 @@ ORDER BY tipo, TABLE_NAME;
 
 **Objetivo:** Analisar os formatos de dados nas colunas `d_1980` a `d_2030` antes de normalizar
 
+> 📌 **ATENÇÃO:** Este exercício é de **somente leitura** sobre o banco `imp`. Todas as queries consultam a tabela original `imp.tb_dados` (que ainda se chama `tb_dados` no `imp`, não `fact_indicador`).
+>
 > ⚠️ Este exercício é **crítico**. Uma migração sem análise prévia resulta em **perda de dados**.
 
 ### 6.1 — Descobrir os Formatos
 
 ```sql
 -- Contar tipos de valores em d_2020 (ano com mais dados)
+-- Consultando diretamente o banco imp
 SELECT 
     CASE
         WHEN d_2020 IS NULL OR TRIM(d_2020) = '' THEN 'VAZIO'
@@ -786,8 +806,8 @@ SELECT
         ELSE 'OUTRO'
     END AS tipo_dado,
     COUNT(*) AS quantidade,
-    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM fact_indicador), 2) AS percentual
-FROM fact_indicador
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM imp.tb_dados), 2) AS percentual
+FROM imp.tb_dados
 GROUP BY tipo_dado
 ORDER BY quantidade DESC;
 ```
@@ -795,27 +815,27 @@ ORDER BY quantidade DESC;
 ### 6.2 — Ver Exemplos de Cada Tipo
 
 ```sql
--- Exemplos de valores com vírgula (formato BR)
+-- Exemplos de valores com vírgula (formato BR) — consultando banco imp
 SELECT DISTINCT d_2020
-FROM fact_indicador
+FROM imp.tb_dados
 WHERE d_2020 REGEXP '^-?[0-9]+,[0-9]+$'
 LIMIT 10;
 
 -- Exemplos de valores com ponto e vírgula (BR completo)
 SELECT DISTINCT d_2020
-FROM fact_indicador
+FROM imp.tb_dados
 WHERE d_2020 REGEXP '^-?[0-9]{1,3}(\\.[0-9]{3})+,[0-9]+$'
 LIMIT 10;
 
 -- Exemplos de texto/caracteres especiais
 SELECT DISTINCT d_2020
-FROM fact_indicador
+FROM imp.tb_dados
 WHERE d_2020 REGEXP '[a-zA-Z]' OR d_2020 LIKE '%[%'
 LIMIT 10;
 
 -- Exemplos de valores com espaços
 SELECT CONCAT("'", d_2020, "'") AS valor_com_aspas, LENGTH(d_2020) AS tamanho
-FROM fact_indicador
+FROM imp.tb_dados
 WHERE d_2020 LIKE ' %' OR d_2020 LIKE '% '
 LIMIT 10;
 ```
@@ -849,9 +869,151 @@ python analisar_dados_migracao.py
 
 ## 7. Exercício 5 — Migração e Normalização
 
-**Objetivo:** Criar a estrutura normalizada e migrar os dados com conversão de formatos
+**Objetivo:** Copiar os dados do banco `imp` para seu banco individual, executar a limpeza planejada nos exercícios anteriores, padronizar a nomenclatura e criar a estrutura normalizada do Data Warehouse
 
-### 7.1 — Criar Dimensão Tempo
+> 🎯 **A partir deste exercício**, todas as operações serão executadas **no seu banco individual** (`colabX`). Certifique-se de estar conectado ao seu banco no DBeaver ou usar `conectar()` (sem parâmetro) no Python.
+
+### 7.1 — Copiar Dados do `imp` para Seu Banco
+
+> ⚠️ **ETAPA OBRIGATÓRIA** — Esta é a primeira operação de escrita. Ela copia todas as 23 tabelas do banco `imp` para o seu banco individual.
+
+Execute no DBeaver, **conectado ao seu banco** (`colabX`):
+
+```sql
+-- =============================================
+-- CÓPIA DAS TABELAS DO BANCO imp → seu banco
+-- =============================================
+-- Certifique-se de estar conectado ao SEU banco
+
+CREATE TABLE tb_aspecto AS SELECT * FROM imp.tb_aspecto;
+CREATE TABLE tb_nota AS SELECT * FROM imp.tb_nota;
+CREATE TABLE tb_fonte AS SELECT * FROM imp.tb_fonte;
+CREATE TABLE tb_unidade AS SELECT * FROM imp.tb_unidade;
+CREATE TABLE tb_localidade AS SELECT * FROM imp.tb_localidade;
+CREATE TABLE tb_variavel AS SELECT * FROM imp.tb_variavel;
+CREATE TABLE tb_base_cart AS SELECT * FROM imp.tb_base_cart;
+CREATE TABLE tb_rel_ter AS SELECT * FROM imp.tb_rel_ter;
+CREATE TABLE tb_dados AS SELECT * FROM imp.tb_dados;
+CREATE TABLE tb_dados_mensal AS SELECT * FROM imp.tb_dados_mensal;
+CREATE TABLE tb_rel_var_fnt AS SELECT * FROM imp.tb_rel_var_fnt;
+CREATE TABLE tb_rel_var_nota AS SELECT * FROM imp.tb_rel_var_nota;
+CREATE TABLE tb_rel_ter_var AS SELECT * FROM imp.tb_rel_ter_var;
+CREATE TABLE tb_base_cart_ptos AS SELECT * FROM imp.tb_base_cart_ptos;
+CREATE TABLE tb_loc_pai AS SELECT * FROM imp.tb_loc_pai;
+CREATE TABLE tb_localidade_historico AS SELECT * FROM imp.tb_localidade_historico;
+CREATE TABLE tb_localidade_regiao_planejamento_saude AS SELECT * FROM imp.tb_localidade_regiao_planejamento_saude;
+CREATE TABLE tb_consulta AS SELECT * FROM imp.tb_consulta;
+CREATE TABLE tb_infmun AS SELECT * FROM imp.tb_infmun;
+CREATE TABLE tb_var_calculado AS SELECT * FROM imp.tb_var_calculado;
+CREATE TABLE tb_var_produto AS SELECT * FROM imp.tb_var_produto;
+CREATE TABLE tb_log_busca AS SELECT * FROM imp.tb_log_busca;
+CREATE TABLE tb_erro_mvto AS SELECT * FROM imp.tb_erro_mvto;
+```
+
+**Validar a cópia:**
+
+```sql
+-- Verificar que todas as tabelas foram copiadas
+SELECT COUNT(*) AS total_tabelas
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE();
+-- Esperado: 23
+
+-- Comparar contagem de registros
+SELECT 
+    TABLE_NAME AS tabela,
+    TABLE_ROWS AS registros
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_ROWS DESC;
+```
+
+### 7.2 — Executar Limpeza de Dados (planejada no Exercício 2)
+
+Agora que você tem os dados no seu banco, execute as estratégias que planejou no Exercício 2.
+
+**Resolver duplicatas em tb_base_cart** (escolha a estratégia que anotou):
+
+```sql
+-- Estratégia A — Remover duplicatas idênticas (manter 1)
+CREATE TABLE tb_base_cart_temp AS
+SELECT DISTINCT *
+FROM tb_base_cart;
+
+DROP TABLE tb_base_cart;
+RENAME TABLE tb_base_cart_temp TO tb_base_cart;
+```
+
+**Resolver duplicatas em tb_loc_pai:**
+
+```sql
+CREATE TABLE tb_loc_pai_temp AS
+SELECT DISTINCT *
+FROM tb_loc_pai;
+
+DROP TABLE tb_loc_pai;
+RENAME TABLE tb_loc_pai_temp TO tb_loc_pai;
+```
+
+**Resolver registros órfãos** (escolha a opção que anotou):
+
+```sql
+-- Opção 1 — Criar registro genérico (recomendado)
+INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
+SELECT DISTINCT d.loc_cod, CONCAT('Localidade Desconhecida (', d.loc_cod, ')'), 0
+FROM tb_dados d
+LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+WHERE l.loc_cod IS NULL;
+
+INSERT INTO tb_variavel (var_cod, var_nome)
+SELECT DISTINCT d.var_cod, CONCAT('Variável Desconhecida (', d.var_cod, ')')
+FROM tb_dados d
+LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
+WHERE v.var_cod IS NULL;
+```
+
+**Validar limpeza:**
+
+```sql
+SELECT 'tb_base_cart duplicatas' AS verificacao,
+       COUNT(*) - COUNT(DISTINCT cod_base) AS problemas
+FROM tb_base_cart
+UNION ALL
+SELECT 'tb_loc_pai duplicatas',
+       COUNT(*) - COUNT(DISTINCT loc_cod)
+FROM tb_loc_pai
+UNION ALL
+SELECT 'tb_dados loc_cod órfãos',
+       COUNT(DISTINCT d.loc_cod)
+FROM tb_dados d LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+WHERE l.loc_cod IS NULL
+UNION ALL
+SELECT 'tb_dados var_cod órfãos',
+       COUNT(DISTINCT d.var_cod)
+FROM tb_dados d LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
+WHERE v.var_cod IS NULL;
+```
+
+**Resultado esperado:** Todos os valores na coluna `problemas` devem ser `0`.
+
+### 7.3 — Executar Padronização de Nomenclatura (planejada no Exercício 3)
+
+Agora execute os scripts de renomeação que estudou no Exercício 3. Siga a ordem: **primeiro colunas, depois tabelas.**
+
+> 📖 Volte à **seção 5.2** para os scripts de renomeação de colunas e à **seção 5.3** para renomeação de tabelas.
+> Execute uma tabela por vez e valide antes de prosseguir.
+
+**Validar nomenclatura (queries da seção 5.4):**
+
+```sql
+SELECT TABLE_NAME
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME LIKE 'tb_%';
+-- Esperado: 0 registros
+```
+
+### 7.4 — Criar Dimensão Tempo
 
 ```sql
 -- Criar tabela dim_tempo (granularidade anual + mensal)
@@ -927,7 +1089,7 @@ SELECT * FROM dim_tempo WHERE ano = 2020 ORDER BY mes;
 
 > 💡 **Por que dois níveis de granularidade?** O banco atual (`fact_indicador_original`) armazena dados **apenas por ano** (colunas `d_1980` a `d_2030`). Os registros anuais (`mes IS NULL`) garantem compatibilidade com a migração atual. Os registros mensais preparam a estrutura para futuras cargas de dados com granularidade mensal — por exemplo, dados da tabela `fact_indicador_mensal` que hoje está vazia.
 
-### 7.2 — Criar a Função de Conversão
+### 7.5 — Criar a Função de Conversão
 
 ```sql
 DELIMITER $$
@@ -983,7 +1145,7 @@ END$$
 DELIMITER ;
 ```
 
-### 7.3 — Testar a Função
+### 7.6 — Testar a Função
 
 ```sql
 -- Teste de todos os formatos encontrados
@@ -1023,7 +1185,7 @@ FROM (
 
 > ⚠️ **Se algum resultado não bater**, revise a função antes de prosseguir!
 
-### 7.4 — Criar Tabela Fato
+### 7.7 — Criar Tabela Fato
 
 ```sql
 CREATE TABLE fact_indicador (
@@ -1054,7 +1216,7 @@ CREATE TABLE fact_indicador (
 
 > 💡 **Observe:** A tabela original `fact_indicador` (ex-`tb_dados`) será renomeada para `fact_indicador_original` ao final, e esta nova tabela assumirá o nome `fact_indicador`.
 
-### 7.5 — Migrar os Dados (1 ano para teste)
+### 7.8 — Migrar os Dados (1 ano para teste)
 
 ```sql
 -- Migrar apenas d_2020 como teste
@@ -1087,7 +1249,7 @@ GROUP BY indicador_tipo
 ORDER BY qtd DESC;
 ```
 
-### 7.6 — Migrar Todos os Anos
+### 7.9 — Migrar Todos os Anos
 
 > ⚠️ Esta etapa pode demorar **10-30 minutos** dependendo do hardware.
 
@@ -1100,7 +1262,7 @@ TRUNCATE TABLE fact_indicador;
 CALL sp_migrar_dados_para_fato();
 ```
 
-Ou manualmente, repetindo o INSERT da seção 7.5 para cada ano:
+Ou manualmente, repetindo o INSERT da seção 7.8 para cada ano:
 
 ```sql
 -- Gerar os INSERTs para todos os anos
@@ -1124,7 +1286,7 @@ WHERE f.d_2019 IS NOT NULL;
 -- Repetir para cada ano de 1980 a 2030...
 ```
 
-### 7.7 — Validar Migração Completa
+### 7.10 — Validar Migração Completa
 
 ```sql
 -- 1. Total de registros migrados
@@ -1152,6 +1314,10 @@ RENAME TABLE fact_indicador_original TO fact_indicador_backup_colunar;
 
 ### ✅ Checkpoint — Migração Concluída
 
+- [ ] 23 tabelas copiadas do `imp` para seu banco (7.1)
+- [ ] Duplicatas resolvidas em tb_base_cart e tb_loc_pai (7.2)
+- [ ] Registros órfãos tratados (7.2)
+- [ ] Nomenclatura padronizada — zero tabelas com prefixo `tb_` (7.3)
 - [ ] dim_tempo criada com 663 registros (51 anuais + 612 mensais)
 - [ ] Função de conversão testada com todos os formatos
 - [ ] fact_indicador populada com dados de todos os anos

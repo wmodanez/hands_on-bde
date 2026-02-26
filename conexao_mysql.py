@@ -21,7 +21,6 @@ def conectar(database=CONFIG['database']):
     """
     try:
         config = CONFIG.copy()
-        config['database'] = database
         
         conexao = mysql.connector.connect(**config)
         if conexao.is_connected():

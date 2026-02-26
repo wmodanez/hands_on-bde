@@ -442,7 +442,7 @@ WHERE cod_base IN (
     GROUP BY cod_base
     HAVING COUNT(*) > 1
 )
-ORDER BY cod_base;
+ORDER BY cod_base, ano;
 ```
 
 📝 **Pergunta:** Os registros duplicados são idênticos ou possuem dados diferentes?
@@ -454,23 +454,32 @@ Analise os dados e escolha qual estratégia você irá aplicar **após copiar os
 **Estratégia A — Remover duplicatas idênticas (manter 1):**
 
 ```sql
--- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
--- Criar tabela temporária com registros únicos
-CREATE TABLE tb_base_cart_temp AS
+-- 💡 OPCIONAL: Criar tabela temporária em SEU BANCO para análise (após copiar dados no Exercício 5)
+-- Isso permite validar a estratégia antes de fazer o DROP/RENAME na tabela original
+
+CREATE TABLE tb_base_cart_temp_a AS
 SELECT DISTINCT *
 FROM tb_base_cart;
 
--- Substituir a tabela original
-DROP TABLE tb_base_cart;
-RENAME TABLE tb_base_cart_temp TO tb_base_cart;
+-- Validar a tabela temporária
+SELECT COUNT(*) AS registros_originais FROM tb_base_cart;
+SELECT COUNT(*) AS registros_temporaria FROM tb_base_cart_temp_a;
+SELECT COUNT(DISTINCT cod_base) AS cod_base_unicos FROM tb_base_cart;
+
+-- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- DROP TABLE tb_base_cart;
+-- RENAME TABLE tb_base_cart_temp_a TO tb_base_cart;
+
+-- Ou descartar a temporária se não gostar do resultado:
+-- DROP TABLE tb_base_cart_temp_a;
 ```
 
 **Estratégia B — Manter o registro com maior ano:**
 
 ```sql
--- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
--- Criar tabela com o maior ano por cod_base
-CREATE TABLE tb_base_cart_temp AS
+-- 💡 OPCIONAL: Criar tabela temporária em SEU BANCO para análise (após copiar dados no Exercício 5)
+
+CREATE TABLE tb_base_cart_temp_b AS
 SELECT b.*
 FROM tb_base_cart b
 INNER JOIN (
@@ -479,13 +488,27 @@ INNER JOIN (
     GROUP BY cod_base
 ) m ON b.cod_base = m.cod_base AND b.ano = m.max_ano;
 
-DROP TABLE tb_base_cart;
-RENAME TABLE tb_base_cart_temp TO tb_base_cart;
+-- Validar a tabela temporária
+SELECT COUNT(*) AS registros_originais FROM tb_base_cart;
+SELECT COUNT(*) AS registros_temporaria FROM tb_base_cart_temp_b;
+SELECT COUNT(DISTINCT cod_base) AS cod_base_unicos FROM tb_base_cart_temp_b;
+
+-- Comparar anos: devem ser todos "máximos"
+SELECT 
+    (SELECT MAX(ano) FROM tb_base_cart) AS ano_max_original,
+    (SELECT MAX(ano) FROM tb_base_cart_temp_b) AS ano_max_estrategia_b;
+
+-- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- DROP TABLE tb_base_cart;
+-- RENAME TABLE tb_base_cart_temp_b TO tb_base_cart;
+
+-- Ou descartar a temporária se não gostar do resultado:
+-- DROP TABLE tb_base_cart_temp_b;
 ```
 
 📝 **Anote sua escolha:** Estratégia A ou B? Justifique.
 
-### 4.3 — Analisar Duplicatas em tb_loc_pai
+### 4.3 — Planejar Resolução de Duplicatas em tb_loc_pai
 
 ```sql
 -- Analisar duplicatas em detalhe (consultando banco imp)
@@ -502,36 +525,72 @@ ORDER BY loc_cod;
 
 📝 **Pergunta:** As duplicatas em `tb_loc_pai` são idênticas?
 
-### 4.4 — Analisar Registros Órfãos
+A resolução é similar à tb_base_cart. **Após copiar os dados no Exercício 5**, você pode criar uma tabela temporária para análise:
+
+```sql
+-- 💡 OPCIONAL: Criar tabela temporária em SEU BANCO para análise (após copiar dados no Exercício 5)
+
+CREATE TABLE tb_loc_pai_temp AS
+SELECT DISTINCT *
+FROM tb_loc_pai;
+
+-- Validar
+SELECT COUNT(*) AS registros_originais FROM tb_loc_pai;
+SELECT COUNT(*) AS registros_temporaria FROM tb_loc_pai_temp;
+SELECT COUNT(DISTINCT loc_cod) AS loc_cod_unicos FROM tb_loc_pai_temp;
+
+-- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- DROP TABLE tb_loc_pai;
+-- RENAME TABLE tb_loc_pai_temp TO tb_loc_pai;
+
+-- Ou descartar:
+-- DROP TABLE tb_loc_pai_temp;
+```
+
+### 4.4 — Planejar Resolução de Registros Órfãos
 
 Identifique os problemas de integridade e escolha a estratégia de resolução:
 
 **Opção 1 — Criar registro genérico (recomendado):**
 
 ```sql
--- ⚠️ NÃO EXECUTE AGORA — somente após copiar os dados para seu banco (Exercício 5)
--- Criar localidade "Desconhecida" para referência
-INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
-SELECT DISTINCT d.loc_cod, CONCAT('Localidade Desconhecida (', d.loc_cod, ')'), 0
+-- 💡 OPCIONAL: Análise de registros órfãos em SEU BANCO (após copiar dados no Exercício 5)
+-- Verificar quantos registros órfãos existem
+
+SELECT 'tb_dados loc_cod órfãos' AS tipo,
+       COUNT(DISTINCT d.loc_cod) AS quantidade
 FROM tb_dados d
 LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
-WHERE l.loc_cod IS NULL;
-
--- Criar variável "Desconhecida" para referência
-INSERT INTO tb_variavel (var_cod, var_nome)
-SELECT DISTINCT d.var_cod, CONCAT('Variável Desconhecida (', d.var_cod, ')')
+WHERE l.loc_cod IS NULL
+UNION ALL
+SELECT 'tb_dados var_cod órfãos',
+       COUNT(DISTINCT d.var_cod)
 FROM tb_dados d
 LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
 WHERE v.var_cod IS NULL;
+
+-- Se decidir criar registros genéricos (Exercício 5 — seção 7.2):
+-- INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
+-- SELECT DISTINCT d.loc_cod, CONCAT('Localidade Desconhecida (', d.loc_cod, ')'), 0
+-- FROM tb_dados d
+-- LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+-- WHERE l.loc_cod IS NULL;
 ```
 
 **Opção 2 — Remover registros órfãos:**
 
 ```sql
--- ⚠️ NÃO EXECUTE AGORA — CUIDADO: Perda de dados!
-DELETE d FROM tb_dados d
+-- ⚠️ CUIDADO: Esta opção causa PERDA DE DADOS
+-- Análise prévia: quantos registros serão removidos?
+SELECT COUNT(*) AS registros_a_remover
+FROM tb_dados d
 LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
 WHERE l.loc_cod IS NULL;
+
+-- Se decidir remover (Exercício 5 — seção 7.2):
+-- DELETE d FROM tb_dados d
+-- LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
+-- WHERE l.loc_cod IS NULL;
 ```
 
 📝 **Anote sua escolha:** Opção 1 ou 2? Justifique.

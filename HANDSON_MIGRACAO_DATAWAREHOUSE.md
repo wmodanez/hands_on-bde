@@ -10,16 +10,17 @@
 ## 📋 Índice
 
 1. [Sobre este Hands-On](#1-sobre-este-hands-on)
-2. [Configuração do Ambiente](#2-configuração-do-ambiente)
-3. [Exercício 1 — Diagnóstico do Banco Original](#3-exercício-1--diagnóstico-do-banco-original)
-4. [Exercício 2 — Análise e Planejamento da Limpeza](#4-exercício-2--análise-e-planejamento-da-limpeza-de-dados)
-5. [Exercício 3 — Planejamento da Padronização](#5-exercício-3--planejamento-da-padronização-de-nomenclatura)
-6. [Exercício 4 — Análise dos Dados da Tabela Fato](#6-exercício-4--análise-dos-dados-da-tabela-fato)
-7. [Exercício 5 — Migração e Normalização](#7-exercício-5--migração-e-normalização)
-8. [Exercício 6 — Chaves Primárias e Estrangeiras](#8-exercício-6--chaves-primárias-e-estrangeiras)
-9. [Exercício 7 — Validação Final e Consultas](#9-exercício-7--validação-final-e-consultas)
-10. [Exercício 8 — Regiões de Trabalho por Órgão](#10-exercício-8--regiões-de-trabalho-por-órgão)
-11. [Referência Rápida](#11-referência-rápida)
+2. [Dicionário de Dados BDE — Estrutura Original](#2-dicionário-de-dados-bde--estrutura-original)
+3. [Configuração do Ambiente](#3-configuração-do-ambiente)
+4. [Exercício 1 — Diagnóstico do Banco Original](#4-exercício-1--diagnóstico-do-banco-original)
+5. [Exercício 2 — Análise e Planejamento da Limpeza](#5-exercício-2--análise-e-planejamento-da-limpeza-de-dados)
+6. [Exercício 3 — Planejamento da Padronização](#6-exercício-3--planejamento-da-padronização-de-nomenclatura)
+7. [Exercício 4 — Análise dos Dados da Tabela Fato](#7-exercício-4--análise-dos-dados-da-tabela-fato)
+8. [Exercício 5 — Migração e Normalização](#8-exercício-5--migração-e-normalização)
+9. [Exercício 6 — Chaves Primárias e Estrangeiras](#9-exercício-6--chaves-primárias-e-estrangeiras)
+10. [Exercício 7 — Validação Final e Consultas](#10-exercício-7--validação-final-e-consultas)
+11. [Exercício 8 — Regiões de Trabalho por Órgão](#11-exercício-8--regiões-de-trabalho-por-órgão)
+12. [Referência Rápida](#12-referência-rápida)
 
 ---
 
@@ -75,9 +76,394 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 
 ---
 
-## 2. Configuração do Ambiente
+## 2. Dicionário de Dados BDE — Estrutura Original
 
-### 2.1 — Configuração do DBeaver
+> 📖 Esta seção documenta a estrutura do banco de dados BDE original (banco `imp`), conforme o modelo entidade-relacionamento e o dicionário de dados oficial.
+
+### 2.1 — Diagrama Entidade-Relacionamento (ER)
+
+O diagrama abaixo representa a estrutura original do banco BDE:
+
+```mermaid
+erDiagram
+    %% ═══════════════════════════════════════════════════════════════
+    %% MODELO ER ORIGINAL - BANCO BDE (imp)
+    %% ═══════════════════════════════════════════════════════════════
+
+    tb_nota {
+        SMALLINT nota_cod PK
+        TEXT nota_nome
+    }
+
+    tb_rel_var_nota {
+        SMALLINT var_cod FK
+        SMALLINT nota_cod FK
+        SMALLINT tb_nota_nota_cod FK
+        SMALLINT tb_dados_loc_cod FK
+        SMALLINT tb_dados_var_cod FK
+    }
+
+    tb_dados {
+        SMALLINT loc_cod PK,FK
+        SMALLINT var_cod PK,FK
+        VARCHAR d_1980
+        VARCHAR d_1981
+        VARCHAR d_1982
+        VARCHAR d_1983
+        VARCHAR d_1984
+        VARCHAR d_1985
+        VARCHAR d_1986
+        VARCHAR d_1987
+        VARCHAR d_1988
+        VARCHAR d_1989
+        VARCHAR d_1990
+        VARCHAR d_1991
+        VARCHAR d_1992
+        VARCHAR d_1993
+        VARCHAR d_1994
+        VARCHAR d_1995
+        VARCHAR d_1996
+        VARCHAR d_1997
+        VARCHAR d_1998
+        VARCHAR d_1999
+        VARCHAR d_2000
+        VARCHAR d_2001
+        VARCHAR d_2002
+        VARCHAR d_2003
+        VARCHAR d_2004
+        VARCHAR d_2005
+        VARCHAR d_2006
+        VARCHAR d_2007
+    }
+
+    tb_variavel {
+        SMALLINT var_cod PK
+        VARCHAR var_cod_old
+        INT var_ordem
+        SMALLINT unid_cod FK
+        VARCHAR var_nome
+        VARCHAR var_periodo
+        YEAR var_ultimo
+        TEXT var_def
+        VARCHAR var_historico
+        TINYINT var_mapa_possivel
+        VARCHAR var_nome_grafico
+        VARCHAR var_nome_grafico2
+        TINYINT var_grafico
+        TINYINT var_grafico_ordem
+        VARCHAR var_mascara
+        SMALLINT var_agregacao
+        SMALLINT var_funcao
+        INT var_variavel
+        SMALLINT var_campo
+        TINYINT var_asp FK
+        VARCHAR var_sig
+        TINYINT var_geo
+        TINYINT var_estatistica_geo
+        SMALLINT tb_dados_loc_cod FK
+        SMALLINT tb_dados_var_cod FK
+    }
+
+    tb_unidade {
+        SMALLINT unid_cod PK
+        VARCHAR unid_nome
+        SMALLINT tb_variavel_var_cod FK
+        SMALLINT tb_variavel_tb_dados_loc_cod FK
+        SMALLINT tb_variavel_tb_dados_var_cod FK
+    }
+
+    tb_aspecto {
+        TINYINT cod_asp PK
+        VARCHAR nome_asp
+        SMALLINT tb_variavel_var_cod FK
+        SMALLINT tb_variavel_tb_dados_loc_cod FK
+        SMALLINT tb_variavel_tb_dados_var_cod FK
+    }
+
+    tb_localidade_regiao_planejamento_saude {
+        VARCHAR loc_cod_ibge
+        VARCHAR loc_nome
+        SMALLINT loc_reg_plan_macro_saude
+        VARCHAR loc_nome_reg_plan_macro_saude
+        SMALLINT loc_reg_plan_micro_saude
+        VARCHAR loc_nome_reg_plan_micro_saude
+        SMALLINT tb_localidade_loc_cod FK
+    }
+
+    tb_localidade {
+        SMALLINT loc_cod PK
+        SMALLINT loc_pai FK
+        VARCHAR loc_nome
+        TINYINT loc_nivel
+        VARCHAR loc_ordem
+        VARCHAR loc_cep_cod_adm
+        VARCHAR loc_cod_ibge
+        SMALLINT loc_reg_plan
+        SMALLINT loc_id_sig
+        SMALLINT loc_reg_plan_macro_saude
+        SMALLINT loc_reg_plan_micro_saude
+        INT tb_loc_pai_loc_cod FK
+        INT tb_loc_pai_loc_reg FK
+    }
+
+    tb_localidade_historico {
+        SMALLINT loc_cod FK
+        VARCHAR loc_historico
+        SMALLINT tb_dados_loc_cod FK
+        SMALLINT tb_dados_var_cod FK
+    }
+
+    tb_loc_pai {
+        INT loc_cod PK
+        INT loc_pai
+        INT loc_reg
+        SMALLINT tb_dados_loc_cod FK
+        SMALLINT tb_dados_var_cod FK
+    }
+
+    tb_fonte {
+        SMALLINT fnt_cod PK
+        VARCHAR fnt_sigla
+        VARCHAR fnt_nome
+        SMALLINT tb_rel_var_fnt_var_cod FK
+        SMALLINT tb_rel_var_fnt_fnt_cod FK
+    }
+
+    tb_rel_var_fnt {
+        SMALLINT var_cod PK,FK
+        SMALLINT fnt_cod PK,FK
+        SMALLINT tb_variavel_var_cod FK
+        SMALLINT tb_variavel_tb_dados_loc_cod FK
+        SMALLINT tb_variavel_tb_dados_var_cod FK
+    }
+
+    %% ═══════════════════════════════════════════════════════════════
+    %% RELACIONAMENTOS
+    %% ═══════════════════════════════════════════════════════════════
+
+    tb_nota ||--o{ tb_rel_var_nota : "nota_cod"
+    tb_variavel ||--o{ tb_rel_var_nota : "var_cod"
+    tb_rel_var_nota }o--|| tb_dados : "loc_cod, var_cod"
+
+    tb_variavel ||--o{ tb_dados : "var_cod"
+    tb_localidade ||--o{ tb_dados : "loc_cod"
+
+    tb_unidade ||--o{ tb_variavel : "unid_cod"
+    tb_aspecto ||--o{ tb_variavel : "cod_asp"
+
+    tb_variavel ||--o{ tb_rel_var_fnt : "var_cod"
+    tb_fonte ||--o{ tb_rel_var_fnt : "fnt_cod"
+
+    tb_localidade ||--o{ tb_localidade_regiao_planejamento_saude : "loc_cod"
+    tb_localidade ||--o{ tb_localidade_historico : "loc_cod"
+    tb_localidade }o--o| tb_localidade : "loc_pai (auto-relacionamento)"
+    tb_loc_pai }o--|| tb_localidade : "loc_cod"
+```
+
+### 2.2 — Descrição das Tabelas
+
+> 📖 **Fonte:** Dicionário de dados do Banco de Dados Estatístico de Goiás - BDE (`docs/Dicionario_de_dados_BDE.pdf`)
+
+#### 📊 Tabela Fato
+
+| Tabela | Descrição Oficial | Tipo |
+| ------ | ----------------- | ---- |
+| `tb_dados` | Descreve o valor das variáveis e tempo (quase uma tabela fato - multidimensional). Contém colunas `d_1980` a `d_2030` para armazenar valores por ano. | **FATO** |
+
+#### 📐 Tabelas de Dimensão
+
+| Tabela | Descrição Oficial | Tipo |
+| ------ | ----------------- | ---- |
+| `tb_variavel` | Descreve as informações das variáveis socioeconômicas. | **DIMENSÃO** |
+| `tb_localidade` | Descreve as localidades de Goiás (Município e Regiões). | **DIMENSÃO** |
+| `tb_unidade` | Descreve a unidade de medida das variáveis. | **DIMENSÃO** |
+| `tb_aspecto` | Descreve os aspectos (social, demográfico, econômico, financeiro, etc.) das variáveis. | **DIMENSÃO** |
+| `tb_fonte` | Descreve a fonte das variáveis. | **DIMENSÃO** |
+| `tb_nota` | Descrição de uso e observações das variáveis. | **DIMENSÃO** |
+
+#### 🔗 Tabelas de Relacionamento (N:N)
+
+| Tabela | Descrição Oficial | Relaciona |
+| ------ | ----------------- | --------- |
+| `tb_rel_var_fnt` | Entidade associativa para relacionar a entidade `tb_variavel` com a `tb_fonte`. | `tb_variavel` ↔ `tb_fonte` |
+| `tb_rel_var_nota` | Entidade associativa para relacionar a entidade `tb_variavel` com a `tb_nota`. | `tb_variavel` ↔ `tb_nota` |
+
+#### 📁 Tabelas Auxiliares
+
+| Tabela | Descrição Oficial | Função |
+| ------ | ----------------- | ------ |
+| `tb_loc_pai` | Descreve a localidade das regiões de agrupamentos (Pai). | Agregação geográfica |
+| `tb_localidade_historico` | Descreve o histórico dos municípios goianos. | Rastreabilidade |
+| `tb_localidade_regiao_planejamento_saude` | Descreve as regiões de planejamento da Secretaria Estadual da Saúde. | Regionalização SES-GO |
+
+### 2.3 — Dicionário de Dados por Tabela
+
+> 📖 **Fonte:** Dicionário de dados do Banco de Dados Estatístico de Goiás - BDE (`docs/Dicionario_de_dados_BDE.pdf`)
+
+#### `tb_nota` — Descrição de uso e observações das variáveis
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `nota_cod` | SMALLINT | 5 | **PK** — Referente ao código da nota da variável socioeconômica |
+| `nota_nome` | TEXT | 255 | Descrição da nota (observação) sobre a variável |
+
+#### `tb_rel_var_nota` — Entidade associativa tb_variavel ↔ tb_nota
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `var_cod` | SMALLINT | 5 | **PK/FK** — Código da variável socioeconômica |
+| `nota_cod` | SMALLINT | 5 | **PK/FK** — Código da nota da variável socioeconômica |
+
+#### `tb_dados` — Tabela Fato (valor das variáveis e tempo)
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `loc_cod` | SMALLINT | 100 | **PK/FK** — Código da localidade |
+| `var_cod` | SMALLINT | 5 | **PK/FK** — Código da variável socioeconômica |
+| `d_1980` | VARCHAR | 100 | Valor da variável no ano de 1980 |
+| `d_1981` | VARCHAR | 100 | Valor da variável no ano de 1981 |
+| `d_1982` | VARCHAR | 100 | Valor da variável no ano de 1982 |
+| ... | ... | ... | *(colunas d_1983 até d_2029)* |
+| `d_2030` | VARCHAR | 100 | Valor da variável no ano de 2030 |
+
+> 💡 **Observação:** A tabela possui **51 colunas de anos** (d_1980 até d_2030). Este modelo **desnormalizado** será transformado em modelo normalizado com `dim_tempo`.
+
+#### `tb_localidade_historico` — Histórico dos municípios goianos
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `loc_cod` | SMALLINT | 6 | **FK** — Código da localidade |
+| `loc_historico` | VARCHAR | 10000 | Texto sobre a história da localidade/município |
+
+#### `tb_localidade_regiao_planejamento_saude` — Regiões de planejamento da SES
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `loc_cod_ibge` | VARCHAR | 8 | Código do IBGE da localidade |
+| `loc_nome` | VARCHAR | 250 | Nome da localidade |
+| `loc_reg_plan_macro_saude` | SMALLINT | 3 | Código da macrorregião de planejamento da Secretaria da Saúde |
+| `loc_nome_reg_plan_macro_saude` | VARCHAR | 50 | Nome da macrorregião de planejamento da Secretaria da Saúde |
+| `loc_reg_plan_micro_saude` | SMALLINT | 3 | Código da microrregião de planejamento da Secretaria da Saúde |
+| `loc_nome_reg_plan_micro_saude` | VARCHAR | 50 | Nome da microrregião de planejamento da Secretaria da Saúde |
+
+#### `tb_localidade` — Localidades de Goiás (Município e Regiões)
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `loc_cod` | SMALLINT | 5 | **PK** — Código da localidade |
+| `loc_pai` | SMALLINT | 5 | **FK** — Código região de agrupamento |
+| `loc_nome` | VARCHAR | 250 | Nome da localidade |
+| `loc_nivel` | INTEGER | 3 | Nível de escala da localidade (Estadual, regional e municipal) |
+| `loc_ordem` | VARCHAR | 255 | Ordem de exibição |
+| `loc_cep_cod_adm` | VARCHAR | 8 | Código administrativo |
+| `loc_cod_ibge` | VARCHAR | 8 | Código do IBGE da localidade |
+| `loc_reg_plan` | SMALLINT | 6 | Código da região de planejamento |
+| `loc_id_sig` | SMALLINT | 5 | ID para sistemas de informação geográfica |
+| `loc_reg_plan_macro_saude` | SMALLINT | 3 | Código da macrorregião de planejamento da Secretaria da Saúde |
+| `loc_reg_plan_micro_saude` | SMALLINT | 3 | Código da microrregião de planejamento da Secretaria da Saúde |
+
+#### `tb_loc_pai` — Localidade das regiões de agrupamentos (Pai)
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `loc_cod` | INTEGER | 11 | **PK/FK** — Código da localidade |
+| `loc_pai` | INTEGER | 11 | Código região de agrupamento |
+| `loc_reg` | INTEGER | 11 | Código da região |
+
+#### `tb_fonte` — Fonte das variáveis
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `fnt_cod` | SMALLINT | 5 | **PK** — Código da fonte de dados |
+| `fnt_sigla` | VARCHAR | 20 | Sigla da fonte de dados |
+| `fnt_nome` | VARCHAR | 255 | Nome da fonte de dados |
+
+#### `tb_rel_var_fnt` — Entidade associativa tb_variavel ↔ tb_fonte
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `var_cod` | INTEGER | 5 | **PK/FK** — Código da variável socioeconômica |
+| `fnt_cod` | SMALLINT | 5 | **PK/FK** — Código da fonte de dados |
+
+#### `tb_aspecto` — Aspectos das variáveis
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `cod_asp` | INTEGER | 1 | **PK** — Código do aspecto da variável socioeconômica |
+| `nome_aspecto` | VARCHAR | 50 | Nome do aspecto da variável socioeconômica |
+
+> 💡 **Aspectos disponíveis:** Social, Demográfico, Econômico, Financeiro, etc.
+
+#### `tb_unidade` — Unidade de medida das variáveis
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `unid_cod` | SMALLINT | 6 | **PK** — Código da unidade de medida da variável socioeconômica |
+| `unid_nome` | VARCHAR | 150 | Nome da unidade de medida da variável socioeconômica |
+
+#### `tb_variavel` — Informações das variáveis socioeconômicas
+
+| Coluna | Tipo | Tamanho | Descrição |
+| ------ | ---- | ------- | --------- |
+| `var_cod` | SMALLINT | 5 | **PK** — Código da variável socioeconômica |
+| `var_cod_old` | SMALLINT | 5 | Código antigo da variável socioeconômica *(não utilizado)* |
+| `var_ordem` | INTEGER | 10 | *(não utilizado - sem informação)* |
+| `unid_cod` | SMALLINT | 6 | **FK** — Código da unidade de medida da variável socioeconômica |
+| `var_nome` | VARCHAR | 250 | Nome da variável socioeconômica |
+| `var_periodo` | VARCHAR | 250 | Período de dados da variável socioeconômica |
+| `var_ultano` | YEAR | 4 | Última data de informação da variável socioeconômica |
+| `var_def` | TEXT | - | *(não utilizado - sem informação)* |
+| `var_historico` | VARCHAR | 250 | Descrição do histórico dos municípios *(não utilizado)* |
+| `var_mapa_possivel` | INTEGER | 4 | Código booleano da possibilidade de representar a variável socioeconômica no mapa |
+| `var_nome_grafico` | VARCHAR | 250 | Descreve o nome da variável no gráfico |
+| `var_nome_grafico2` | VARCHAR | 250 | *(não utilizado - sem informação)* |
+| `var_grafico` | INTEGER | 4 | *(não utilizado - sem informação)* |
+| `var_grafico_ordem` | INTEGER | 4 | *(não utilizado - sem informação)* |
+| `var_mascara` | VARCHAR | 10 | Descreve a máscara do número utilizado para representar a unidade de medida da variável socioeconômica |
+| `var_agregacao` | SMALLINT | 6 | Código para verificar se a variável pode ser agregada por município e região |
+| `var_funcao` | SMALLINT | 5 | *(não utilizado - sem informação)* |
+| `var_variavel` | INTEGER | 5 | *(não utilizado - sem informação)* |
+| `var_campo` | SMALLINT | 5 | *(não utilizado - sem informação)* |
+| `var_asp` | INTEGER | 1 | **FK** — Código do aspecto da variável socioeconômica |
+| `var_sig` | VARCHAR | 8 | Sigla do campo para aplicação em sistemas de informação geográfica |
+| `var_geo` | INTEGER | 1 | *(não utilizado - sem informação)* |
+| `var_estatistica_geo` | INTEGER | 1 | Código para possibilidade de espacialização da variável socioeconômica |
+
+### 2.4 — Problemas Identificados na Estrutura Original
+
+| Problema | Impacto | Solução na Migração |
+| -------- | ------- | ------------------- |
+| **Colunas de ano desnormalizadas** (`d_1980` a `d_2030`) | Impossível fazer consultas dinâmicas por período | Criar `dim_tempo` + normalizar para `fact_indicador` |
+| **Dados em VARCHAR** | Mistura de valores numéricos e textuais na mesma coluna | Criar colunas tipadas (`indicador_vlr`, `indicador_txt`) |
+| **Nomenclatura inconsistente** | Prefixos mistos (`cod_`, `loc_`, `var_`, `fnt_`) | Padronizar com `dim_`, `fact_`, `rel_`, `aux_` |
+| **Ausência de PKs formais** | Sem garantia de unicidade | Criar PKs em todas as tabelas |
+| **Ausência de FKs** | Integridade referencial não garantida | Implementar FKs entre dimensões e fatos |
+| **Duplicatas em `tb_base_cart` e `tb_loc_pai`** | Dados redundantes | Limpeza com DISTINCT |
+| **Registros órfãos em `tb_dados`** | Localidades/variáveis sem correspondência | Criar registros genéricos ou remover |
+| **Regiões fixas em `tb_localidade`** | Não suporta múltiplos órgãos/temporalidade | Implementar modelo Snowflake com SCD Tipo 2 |
+
+### 2.5 — Transformação: Original → Data Warehouse
+
+| Tabela Original | Tabela DW | Tipo no DW |
+| --------------- | --------- | ---------- |
+| `tb_dados` + `d_YYYY` | `fact_indicador` + `dim_tempo` | FATO + DIMENSÃO |
+| `tb_variavel` | `dim_variavel` | DIMENSÃO |
+| `tb_localidade` | `dim_localidade` | DIMENSÃO |
+| `tb_unidade` | `dim_unidade` | DIMENSÃO |
+| `tb_aspecto` | `dim_aspecto` | DIMENSÃO |
+| `tb_fonte` | `dim_fonte` | DIMENSÃO |
+| `tb_nota` | `dim_nota` | DIMENSÃO |
+| `tb_rel_var_fnt` | `rel_variavel_fonte` | RELACIONAMENTO |
+| `tb_rel_var_nota` | `rel_variavel_nota` | RELACIONAMENTO |
+| `tb_loc_pai` | `aux_localidade_hierarquia` | AUXILIAR |
+| `tb_localidade_historico` | `aux_localidade_historico` | AUXILIAR |
+| `tb_localidade_regiao_planejamento_saude` | `dim_regiao` + `bridge_localidade_regiao` | SNOWFLAKE + SCD |
+
+---
+
+## 3. Configuração do Ambiente
+
+### 3.1 — Configuração do DBeaver
 
 1. Abra o DBeaver
 2. Clique em **Nova Conexão** → **MySQL**
@@ -101,7 +487,7 @@ O banco original `imp` contém os dados de referência. Cada colaborador possui 
 5. Clique em **Testar Conexão** → deve retornar "Conectado"
 6. Clique em **Concluir**
 
-### 2.2 — Configuração do Python
+### 3.2 — Configuração do Python
 
 Abra o terminal na pasta do projeto e execute:
 
@@ -124,7 +510,7 @@ source venv/bin/activate
 pip install mysql-connector-python
 ```
 
-### 2.3 — Configurar Conexão nos Scripts Python
+### 3.3 — Configurar Conexão nos Scripts Python
 
 Crie ou edite o arquivo `conexao_mysql.py` com **seus dados de acesso**:
 
@@ -210,7 +596,7 @@ if __name__ == "__main__":
     #     fechar(conn_imp)
 ```
 
-### 2.4 — Testar a Conexão
+### 3.4 — Testar a Conexão
 
 ```bash
 python conexao_mysql.py
@@ -237,7 +623,7 @@ Antes de prosseguir, confirme:
 
 ---
 
-### 2.5 — Como Acessar o Banco `imp` (Referência)
+### 3.5 — Como Acessar o Banco `imp` (Referência)
 
 Para consultar o banco original e fazer diagnóstico, você tem 3 opções:
 
@@ -281,7 +667,7 @@ python analisar_bancos_comparativo.py
 
 **Resultado:**
 
-```
+```text
 ======================================================================
 📊 COMPARAÇÃO: 'colabX' vs 'imp'
 ======================================================================
@@ -305,17 +691,17 @@ python analisar_bancos_comparativo.py
 
 ---
 
-## 3. Exercício 1 — Diagnóstico do Banco Original
+## 4. Exercício 1 — Diagnóstico do Banco Original
 
 **Objetivo:** Entender o estado atual do banco e identificar problemas
 
 > 📌 **ATENÇÃO:** Neste exercício todas as consultas são de **somente leitura** (SELECT) e devem ser executadas sobre o banco `imp` (banco de referência). Seu banco individual está vazio nesta etapa — os dados serão copiados para ele no Exercício 5.
 >
-> No DBeaver, conecte ao banco `imp` (veja seção 2.5) ou use `TABLE_SCHEMA = 'imp'` nas queries de `information_schema`.
+> No DBeaver, conecte ao banco `imp` (veja seção 3.5) ou use `TABLE_SCHEMA = 'imp'` nas queries de `information_schema`.
 >
 > No Python, use `conectar(database='imp')`.
 
-### 3.1 — Mapear a Estrutura
+### 4.1 — Mapear a Estrutura
 
 Execute as queries abaixo no DBeaver (conectado ao `imp`) ou via Python. **Anote os resultados.**
 
@@ -347,7 +733,7 @@ WHERE TABLE_SCHEMA = 'imp'
   AND CONSTRAINT_TYPE = 'FOREIGN KEY';
 ```
 
-### 3.2 — Identificar Problemas de Nomenclatura
+### 4.2 — Identificar Problemas de Nomenclatura
 
 ```sql
 -- 5. Listar todas as colunas de todas as tabelas
@@ -367,7 +753,7 @@ ORDER BY TABLE_NAME, ORDINAL_POSITION;
 - Quais colunas fogem do padrão? (case misto, sem prefixo, abreviações diferentes)
 - Quantas tabelas não têm PK? Quantas não têm FK?
 
-### 3.3 — Identificar Duplicatas
+### 4.3 — Identificar Duplicatas
 
 ```sql
 -- 6. Duplicatas em tb_base_cart (consultando banco imp)
@@ -383,7 +769,7 @@ GROUP BY loc_cod
 HAVING COUNT(*) > 1;
 ```
 
-### 3.4 — Identificar Registros Órfãos
+### 4.4 — Identificar Registros Órfãos
 
 ```sql
 -- 8. Localidades em tb_dados que não existem em tb_localidade (consultando banco imp)
@@ -422,7 +808,7 @@ Preencha a tabela abaixo com seus achados:
 
 ---
 
-## 4. Exercício 2 — Análise e Planejamento da Limpeza de Dados
+## 5. Exercício 2 — Análise e Planejamento da Limpeza de Dados
 
 **Objetivo:** Identificar duplicatas e registros órfãos no banco `imp` e planejar a estratégia de limpeza
 
@@ -430,7 +816,7 @@ Preencha a tabela abaixo com seus achados:
 >
 > A **execução** da limpeza será feita no **Exercício 5**, após copiar os dados para o seu banco individual.
 
-### 4.1 — Analisar Duplicatas em tb_base_cart
+### 5.1 — Analisar Duplicatas em tb_base_cart
 
 ```sql
 -- Ver os registros duplicados em detalhe (consultando banco imp)
@@ -447,7 +833,7 @@ ORDER BY cod_base, ano;
 
 📝 **Pergunta:** Os registros duplicados são idênticos ou possuem dados diferentes?
 
-### 4.2 — Planejar Resolução de Duplicatas em tb_base_cart
+### 5.2 — Planejar Resolução de Duplicatas em tb_base_cart
 
 Analise os dados e escolha qual estratégia você irá aplicar **após copiar os dados para seu banco** (Exercício 5):
 
@@ -466,7 +852,7 @@ SELECT COUNT(*) AS registros_originais FROM tb_base_cart;
 SELECT COUNT(*) AS registros_temporaria FROM tb_base_cart_temp_a;
 SELECT COUNT(DISTINCT cod_base) AS cod_base_unicos FROM tb_base_cart;
 
--- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- Se validado, fazer a substituição final (Exercício 5 — seção 8.2):
 -- DROP TABLE tb_base_cart;
 -- RENAME TABLE tb_base_cart_temp_a TO tb_base_cart;
 
@@ -498,7 +884,7 @@ SELECT
     (SELECT MAX(ano) FROM tb_base_cart) AS ano_max_original,
     (SELECT MAX(ano) FROM tb_base_cart_temp_b) AS ano_max_estrategia_b;
 
--- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- Se validado, fazer a substituição final (Exercício 5 — seção 8.2):
 -- DROP TABLE tb_base_cart;
 -- RENAME TABLE tb_base_cart_temp_b TO tb_base_cart;
 
@@ -508,7 +894,7 @@ SELECT
 
 📝 **Anote sua escolha:** Estratégia A ou B? Justifique.
 
-### 4.3 — Planejar Resolução de Duplicatas em tb_loc_pai
+### 5.3 — Planejar Resolução de Duplicatas em tb_loc_pai
 
 ```sql
 -- Analisar duplicatas em detalhe (consultando banco imp)
@@ -539,7 +925,7 @@ SELECT COUNT(*) AS registros_originais FROM tb_loc_pai;
 SELECT COUNT(*) AS registros_temporaria FROM tb_loc_pai_temp;
 SELECT COUNT(DISTINCT loc_cod) AS loc_cod_unicos FROM tb_loc_pai_temp;
 
--- Se validado, fazer a substituição final (Exercício 5 — seção 7.2):
+-- Se validado, fazer a substituição final (Exercício 5 — seção 8.2):
 -- DROP TABLE tb_loc_pai;
 -- RENAME TABLE tb_loc_pai_temp TO tb_loc_pai;
 
@@ -547,7 +933,7 @@ SELECT COUNT(DISTINCT loc_cod) AS loc_cod_unicos FROM tb_loc_pai_temp;
 -- DROP TABLE tb_loc_pai_temp;
 ```
 
-### 4.4 — Planejar Resolução de Registros Órfãos
+### 5.4 — Planejar Resolução de Registros Órfãos
 
 Identifique os problemas de integridade e escolha a estratégia de resolução:
 
@@ -569,7 +955,7 @@ FROM tb_dados d
 LEFT JOIN tb_variavel v ON d.var_cod = v.var_cod
 WHERE v.var_cod IS NULL;
 
--- Se decidir criar registros genéricos (Exercício 5 — seção 7.2):
+-- Se decidir criar registros genéricos (Exercício 5 — seção 8.2):
 -- INSERT INTO tb_localidade (loc_cod, loc_nome, loc_nivel)
 -- SELECT DISTINCT d.loc_cod, CONCAT('Localidade Desconhecida (', d.loc_cod, ')'), 0
 -- FROM tb_dados d
@@ -587,7 +973,7 @@ FROM tb_dados d
 LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
 WHERE l.loc_cod IS NULL;
 
--- Se decidir remover (Exercício 5 — seção 7.2):
+-- Se decidir remover (Exercício 5 — seção 8.2):
 -- DELETE d FROM tb_dados d
 -- LEFT JOIN tb_localidade l ON d.loc_cod = l.loc_cod
 -- WHERE l.loc_cod IS NULL;
@@ -595,7 +981,7 @@ WHERE l.loc_cod IS NULL;
 
 📝 **Anote sua escolha:** Opção 1 ou 2? Justifique.
 
-### 4.5 — Verificação de Referência (somente leitura)
+### 5.5 — Verificação de Referência (somente leitura)
 
 Execute esta query no `imp` para confirmar os números dos problemas encontrados:
 
@@ -631,7 +1017,7 @@ WHERE v.var_cod IS NULL;
 
 ---
 
-## 5. Exercício 3 — Planejamento da Padronização de Nomenclatura
+## 6. Exercício 3 — Planejamento da Padronização de Nomenclatura
 
 **Objetivo:** Entender o padrão de nomenclatura e preparar os scripts de renomeação
 
@@ -639,7 +1025,7 @@ WHERE v.var_cod IS NULL;
 >
 > 📖 Consulte o documento `padrao_nomenclatura.md` para a referência completa do de-para.
 
-### 5.1 — Entender o Padrão
+### 6.1 — Entender o Padrão
 
 | Prefixo | Tipo | Exemplo |
 | --------- | ----- | --------- |
@@ -659,7 +1045,7 @@ WHERE v.var_cod IS NULL;
 | `_dh` | Data/hora | `busca_dh` |
 | `_ind` | Indicador (boolean) | `mapa_disponivel_ind` |
 
-### 5.2 — Scripts de Renomeação de Colunas (preparar para execução futura)
+### 6.2 — Scripts de Renomeação de Colunas (preparar para execução futura)
 
 > ⚠️ **NÃO EXECUTE AGORA** — estes scripts serão executados no **Exercício 5**, no seu banco individual, após a cópia dos dados. Por enquanto, estude e entenda o de-para.
 
@@ -767,7 +1153,7 @@ ALTER TABLE tb_erro_mvto
     CHANGE COLUMN msg_erro erro_msg TEXT;
 ```
 
-### 5.3 — Script de Renomeação de Tabelas (preparar para execução futura)
+### 6.3 — Script de Renomeação de Tabelas (preparar para execução futura)
 
 > ⚠️ **NÃO EXECUTE AGORA** — Este script será executado no **Exercício 5**, no seu banco individual, **somente após** todas as colunas terem sido renomeadas com sucesso.
 
@@ -798,7 +1184,7 @@ RENAME TABLE
     tb_erro_mvto TO log_erro_movimento;
 ```
 
-### 5.4 — Queries de Validação (para usar após execução no Exercício 5)
+### 6.4 — Queries de Validação (para usar após execução no Exercício 5)
 
 Guarde estas queries para validar **após executar** a renomeação no seu banco:
 
@@ -839,7 +1225,7 @@ ORDER BY tipo, TABLE_NAME;
 
 ---
 
-## 6. Exercício 4 — Análise dos Dados da Tabela Fato
+## 7. Exercício 4 — Análise dos Dados da Tabela Fato
 
 **Objetivo:** Analisar os formatos de dados nas colunas `d_1980` a `d_2030` antes de normalizar
 
@@ -847,7 +1233,7 @@ ORDER BY tipo, TABLE_NAME;
 >
 > ⚠️ Este exercício é **crítico**. Uma migração sem análise prévia resulta em **perda de dados**.
 
-### 6.1 — Descobrir os Formatos
+### 7.1 — Descobrir os Formatos
 
 ```sql
 -- Contar tipos de valores em d_2020 (ano com mais dados)
@@ -871,7 +1257,7 @@ GROUP BY tipo_dado
 ORDER BY quantidade DESC;
 ```
 
-### 6.2 — Ver Exemplos de Cada Tipo
+### 7.2 — Ver Exemplos de Cada Tipo
 
 ```sql
 -- Exemplos de valores com vírgula (formato BR) — consultando banco imp
@@ -899,7 +1285,7 @@ WHERE d_2020 LIKE ' %' OR d_2020 LIKE '% '
 LIMIT 10;
 ```
 
-### 6.3 — Usando o Script Python
+### 7.3 — Usando o Script Python
 
 Execute o script de análise automática:
 
@@ -926,13 +1312,13 @@ python analisar_dados_migracao.py
 
 ---
 
-## 7. Exercício 5 — Migração e Normalização
+## 8. Exercício 5 — Migração e Normalização
 
 **Objetivo:** Copiar os dados do banco `imp` para seu banco individual, executar a limpeza planejada nos exercícios anteriores, padronizar a nomenclatura e criar a estrutura normalizada do Data Warehouse
 
 > 🎯 **A partir deste exercício**, todas as operações serão executadas **no seu banco individual** (`colabX`). Certifique-se de estar conectado ao seu banco no DBeaver ou usar `conectar()` (sem parâmetro) no Python.
 
-### 7.1 — Copiar Dados do `imp` para Seu Banco
+### 8.1 — Copiar Dados do `imp` para Seu Banco
 
 > ⚠️ **ETAPA OBRIGATÓRIA** — Esta é a primeira operação de escrita. Ela copia todas as 23 tabelas do banco `imp` para o seu banco individual.
 
@@ -987,7 +1373,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 ORDER BY TABLE_ROWS DESC;
 ```
 
-### 7.2 — Executar Limpeza de Dados (planejada no Exercício 2)
+### 8.2 — Executar Limpeza de Dados (planejada no Exercício 2)
 
 Agora que você tem os dados no seu banco, execute as estratégias que planejou no Exercício 2.
 
@@ -1055,14 +1441,14 @@ WHERE v.var_cod IS NULL;
 
 **Resultado esperado:** Todos os valores na coluna `problemas` devem ser `0`.
 
-### 7.3 — Executar Padronização de Nomenclatura (planejada no Exercício 3)
+### 8.3 — Executar Padronização de Nomenclatura (planejada no Exercício 3)
 
 Agora execute os scripts de renomeação que estudou no Exercício 3. Siga a ordem: **primeiro colunas, depois tabelas.**
 
-> 📖 Volte à **seção 5.2** para os scripts de renomeação de colunas e à **seção 5.3** para renomeação de tabelas.
+> 📖 Volte à **seção 6.2** para os scripts de renomeação de colunas e à **seção 6.3** para renomeação de tabelas.
 > Execute uma tabela por vez e valide antes de prosseguir.
 
-**Validar nomenclatura (queries da seção 5.4):**
+**Validar nomenclatura (queries da seção 6.4):**
 
 ```sql
 SELECT TABLE_NAME
@@ -1072,7 +1458,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 -- Esperado: 0 registros
 ```
 
-### 7.4 — Criar Dimensão Tempo
+### 8.4 — Criar Dimensão Tempo
 
 ```sql
 -- Criar tabela dim_tempo (granularidade anual + mensal)
@@ -1148,7 +1534,7 @@ SELECT * FROM dim_tempo WHERE ano = 2020 ORDER BY mes;
 
 > 💡 **Por que dois níveis de granularidade?** O banco atual (`fact_indicador_original`) armazena dados **apenas por ano** (colunas `d_1980` a `d_2030`). Os registros anuais (`mes IS NULL`) garantem compatibilidade com a migração atual. Os registros mensais preparam a estrutura para futuras cargas de dados com granularidade mensal — por exemplo, dados da tabela `fact_indicador_mensal` que hoje está vazia.
 
-### 7.5 — Criar a Função de Conversão
+### 8.5 — Criar a Função de Conversão
 
 ```sql
 DELIMITER $$
@@ -1204,7 +1590,7 @@ END$$
 DELIMITER ;
 ```
 
-### 7.6 — Testar a Função
+### 8.6 — Testar a Função
 
 ```sql
 -- Teste de todos os formatos encontrados
@@ -1244,7 +1630,7 @@ FROM (
 
 > ⚠️ **Se algum resultado não bater**, revise a função antes de prosseguir!
 
-### 7.7 — Criar Tabela Fato
+### 8.7 — Criar Tabela Fato
 
 ```sql
 CREATE TABLE fact_indicador (
@@ -1275,7 +1661,7 @@ CREATE TABLE fact_indicador (
 
 > 💡 **Observe:** A tabela original `fact_indicador` (ex-`tb_dados`) será renomeada para `fact_indicador_original` ao final, e esta nova tabela assumirá o nome `fact_indicador`.
 
-### 7.8 — Migrar os Dados (1 ano para teste)
+### 8.8 — Migrar os Dados (1 ano para teste)
 
 ```sql
 -- Migrar apenas d_2020 como teste
@@ -1308,7 +1694,7 @@ GROUP BY indicador_tipo
 ORDER BY qtd DESC;
 ```
 
-### 7.9 — Migrar Todos os Anos
+### 8.9 — Migrar Todos os Anos
 
 > ⚠️ Esta etapa pode demorar **10-30 minutos** dependendo do hardware.
 
@@ -1321,7 +1707,7 @@ TRUNCATE TABLE fact_indicador;
 CALL sp_migrar_dados_para_fato();
 ```
 
-Ou manualmente, repetindo o INSERT da seção 7.8 para cada ano:
+Ou manualmente, repetindo o INSERT da seção 8.8 para cada ano:
 
 ```sql
 -- Gerar os INSERTs para todos os anos
@@ -1345,7 +1731,7 @@ WHERE f.d_2019 IS NOT NULL;
 -- Repetir para cada ano de 1980 a 2030...
 ```
 
-### 7.10 — Validar Migração Completa
+### 8.10 — Validar Migração Completa
 
 ```sql
 -- 1. Total de registros migrados
@@ -1386,11 +1772,11 @@ RENAME TABLE fact_indicador_original TO fact_indicador_backup_colunar;
 
 ---
 
-## 8. Exercício 6 — Chaves Primárias e Estrangeiras
+## 9. Exercício 6 — Chaves Primárias e Estrangeiras
 
 **Objetivo:** Implementar integridade referencial no Data Warehouse
 
-### 8.1 — Criar Chaves Primárias
+### 9.1 — Criar Chaves Primárias
 
 ```sql
 -- Dimensões simples
@@ -1415,7 +1801,7 @@ ALTER TABLE rel_base_ponto ADD PRIMARY KEY (localidade_id, base_cartografica_id)
 ALTER TABLE aux_localidade_hierarquia ADD PRIMARY KEY (localidade_id);
 ```
 
-### 8.2 — Validar PKs
+### 9.2 — Validar PKs
 
 ```sql
 SELECT 
@@ -1428,7 +1814,7 @@ ORDER BY TABLE_NAME;
 -- Esperado: Mínimo 13 PKs
 ```
 
-### 8.3 — Criar Chaves Estrangeiras
+### 9.3 — Criar Chaves Estrangeiras
 
 ```sql
 -- dim_variavel → dim_unidade
@@ -1485,7 +1871,7 @@ ALTER TABLE rel_base_ponto
     FOREIGN KEY (base_cartografica_id) REFERENCES dim_base_cartografica(base_cartografica_id);
 ```
 
-### 8.4 — Validar FKs
+### 9.4 — Validar FKs
 
 ```sql
 SELECT 
@@ -1513,11 +1899,11 @@ VALUES (99999, 1, 1, 'numero');
 
 ---
 
-## 9. Exercício 7 — Validação Final e Consultas
+## 10. Exercício 7 — Validação Final e Consultas
 
 **Objetivo:** Validar o Data Warehouse completo e testar consultas típicas
 
-### 9.1 — Validação Completa
+### 10.1 — Validação Completa
 
 ```sql
 -- Resumo do Data Warehouse
@@ -1546,7 +1932,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 GROUP BY CONSTRAINT_TYPE;
 ```
 
-### 9.2 — Consultas Típicas de Data Warehouse
+### 10.2 — Consultas Típicas de Data Warehouse
 
 **Consulta 1 — Indicadores de uma localidade em um ano:**
 
@@ -1614,7 +2000,7 @@ JOIN dim_fonte fo ON rf.fonte_id = fo.fonte_id
 WHERE v.variavel_id = 100;
 ```
 
-### 9.3 — Comparação Antes x Depois
+### 10.3 — Comparação Antes x Depois
 
 ```sql
 -- ANTES (estrutura antiga — consulta para referência)
@@ -1655,7 +2041,7 @@ WHERE l.localidade_nivel = 3
 
 ---
 
-## 10. Exercício 8 — Regiões de Trabalho por Órgão
+## 11. Exercício 8 — Regiões de Trabalho por Órgão
 
 **Objetivo:** Implementar o modelo Snowflake parcial com SCD Tipo 2 para suportar múltiplas regionalizações por órgão com rastreabilidade temporal
 
@@ -1664,7 +2050,7 @@ WHERE l.localidade_nivel = 3
 
 > 📖 Documentação de referência: `MODELO_REGIOES_TRABALHO.md`
 
-### 10.1 — Entender a Problemática
+### 11.1 — Entender a Problemática
 
 No Estado de Goiás, **cada órgão define suas próprias regiões de trabalho**. Um mesmo município pertence simultaneamente a regiões de órgãos diferentes, e essas vinculações **mudam ao longo do tempo**:
 
@@ -1680,7 +2066,7 @@ No Estado de Goiás, **cada órgão define suas próprias regiões de trabalho**
 - O modelo estrela atual suporta adicionar a regionalização da Secretaria de Educação **sem ALTER TABLE**?
 - Se um município mudou de microrregião de saúde em 2023, como consultamos a qual microrregião ele pertencia em 2019?
 
-### 10.2 — Criar as Novas Tabelas
+### 11.2 — Criar as Novas Tabelas
 
 Execute as DDLs abaixo. As tabelas já estão incluídas na PARTE 7 do `script_padronizacao_nomenclatura.sql`, mas vamos executar passo a passo para entender cada uma.
 
@@ -1799,7 +2185,7 @@ COMMENT='Bridge Table - Vínculo localidade↔região com temporalidade (SCD Tip
 - `vigencia_fim_dt = NULL` significa **vigente**; com data preenchida significa **encerrado**
 - A `UNIQUE KEY` impede que a mesma localidade entre na mesma região duas vezes na mesma data
 
-### 10.3 — Validar a Estrutura
+### 11.3 — Validar a Estrutura
 
 ```sql
 -- Verificar que as 3 tabelas foram criadas
@@ -1822,7 +2208,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 -- Esperado: 4 FKs (fk_regiao_orgao, fk_regiao_pai, fk_bridge_localidade, fk_bridge_regiao)
 ```
 
-### 10.4 — Popular com Dados Reais
+### 11.4 — Popular com Dados Reais
 
 > 📖 O script completo está em `migrar_dados_regioes.sql`. Aqui executamos passo a passo.
 
@@ -1963,7 +2349,7 @@ GROUP BY r.regiao_tipo
 ORDER BY r.regiao_tipo;
 ```
 
-### 10.5 — Criar Procedure de Movimentação
+### 11.5 — Criar Procedure de Movimentação
 
 ```sql
 DELIMITER $$
@@ -2029,7 +2415,7 @@ DELIMITER ;
 3. Se existe, **encerra** o vínculo anterior (preenche `vigencia_fim_dt`)
 4. Cria o **novo vínculo** com `vigencia_inicio_dt` = data da mudança
 
-### 10.6 — Testar a Movimentação
+### 11.6 — Testar a Movimentação
 
 Vamos simular que o município de Itaberaí (ajuste o `localidade_id` conforme seu banco) mudou de microrregião de saúde em 2023:
 
@@ -2090,7 +2476,7 @@ ORDER BY b.vigencia_inicio_dt;
 | Itaberaí | Goiânia | 2000-01-01 | 2022-12-31 | ⏹️ Encerrado | Carga inicial |
 | Itaberaí | Inhumas | 2023-01-01 | NULL | ✅ Vigente | Redistritamento sanitário 2023 |
 
-### 10.7 — Criar Views de Conveniência
+### 11.7 — Criar Views de Conveniência
 
 ```sql
 -- View 1: Regiões vigentes (para consultas do dia-a-dia)
@@ -2142,7 +2528,7 @@ GROUP BY orgao_sigla, regiao_tipo, regiao_nome
 ORDER BY orgao_sigla, regiao_tipo, regiao_nome;
 ```
 
-### 10.8 — Consultas Avançadas com o Modelo de Regiões
+### 11.8 — Consultas Avançadas com o Modelo de Regiões
 
 **Consulta 1 — Indicadores agregados por macrorregião de saúde:**
 
@@ -2204,7 +2590,7 @@ WHERE r.regiao_nome = 'Goiânia'
 ORDER BY b.vigencia_fim_dt;
 ```
 
-### 10.9 — Validação com Python
+### 11.9 — Validação com Python
 
 Execute o script de validação para verificar o modelo de regiões:
 
@@ -2213,7 +2599,7 @@ python validar_refatoracao.py
 # Escolha a opção 5: "Validar modelo de regiões por órgão"
 ```
 
-### 10.10 — Limpeza (Opcional — apenas após validação completa)
+### 11.10 — Limpeza (Opcional — apenas após validação completa)
 
 > ⚠️ **SOMENTE** execute esta etapa se toda a migração foi validada com sucesso e os vínculos na bridge estão corretos.
 
@@ -2253,7 +2639,7 @@ ALTER TABLE dim_localidade
 
 ---
 
-## 11. Referência Rápida
+## 12. Referência Rápida
 
 ### 🗄️ Guia: Acessar Seu Banco vs Banco `imp`
 

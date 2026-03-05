@@ -1539,7 +1539,7 @@ SELECT * FROM dim_tempo WHERE ano = 2020 ORDER BY mes;
 ```sql
 DELIMITER $$
 
-DROP FUNCTION IF EXISTS fn_converter_valor_numerico$$
+DROP FUNCTION IF EXISTS fn_converter_valor_numerico $$
 
 CREATE FUNCTION fn_converter_valor_numerico(valor_original VARCHAR(100))
 RETURNS DECIMAL(20,6)
@@ -1577,9 +1577,9 @@ BEGIN
         SET valor_limpo = REPLACE(valor_limpo, '.', '');
     END IF;
 
-    -- Tentar converter
+    -- Tentar converter para decimal
     BEGIN
-        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+        DECLARE CONTINUE HANDLER FOR SQLSTATE '22007'
             SET valor_final = NULL;
         SET valor_final = CAST(valor_limpo AS DECIMAL(20,6));
     END;

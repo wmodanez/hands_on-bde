@@ -11,12 +11,12 @@ services:
 #      MYSQL_DATABASE: your_database_name # Optional: create an initial database
       MYSQL_USER: web # Optional: create an initial user
       MYSQL_PASSWORD: 123456 # Optional: set password for the user
+    command: --log_bin_trust_function_creators=1
     ports:
       - "3306:3306" # Expose MySQL port to the host (optional for phpMyAdmin)
     volumes:
       - db_data:/var/lib/mysql # Persist database data
-      - ./my.cnf:/etc/mysql/conf.d/my.cnf # Disable SSL for easier client connections
-
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # Initialize database with custom users
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin
@@ -29,3 +29,4 @@ services:
 
 volumes:
   db_data:
+    driver: local
